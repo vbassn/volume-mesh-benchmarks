@@ -27,7 +27,7 @@ int main(int argc, char *argv[]) {
     std::cout << prop.name << std::endl;
 
     // The profiler:
-    amgcl::profiler<> prof("Solving system with AMGCL");
+    amgcl::profiler<> prof("Solving system with AMGCL GPU... ");
 
     // Read the system matrix and the RHS:
     ptrdiff_t rows, cols;

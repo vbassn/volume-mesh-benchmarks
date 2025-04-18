@@ -20,7 +20,7 @@ int main(int argc, char *argv[]) {
     }
 
     // The profiler:
-    amgcl::profiler<> prof("poisson3Db");
+    amgcl::profiler<> prof("Solving system with AMGCL CPU... ");
 
     // Read the system matrix and the RHS:
     ptrdiff_t rows, cols;
