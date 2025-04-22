@@ -10,6 +10,8 @@ cmake_policy(SET CMP0104 NEW)
 # Compile with normal C++ flags (like your original gcc command).
 
 add_executable(test_solver_CPU test_solver_CPU.cpp)
+target_compile_options(test_solver_CPU PRIVATE -O3)
+
 
 # Include paths (-I):
 target_include_directories(test_solver_CPU PRIVATE
