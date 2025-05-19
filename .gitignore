@@ -1,0 +1,6 @@
+build
+data/Matrix/*.mtx
+data/RHS/*.mtx
+
+__pycache__
+*.py[cod]
