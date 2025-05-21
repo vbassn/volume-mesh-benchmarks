@@ -1,0 +1,4 @@
+git+https://github.com/dtcc-platform/dtcc-core.git@dev/new-volume-mesh-builder-testing#egg=dtcc-core
+git+https://github.com/dtcc-platform/dtcc.git#egg=dtcc
+numpy
+gmsh

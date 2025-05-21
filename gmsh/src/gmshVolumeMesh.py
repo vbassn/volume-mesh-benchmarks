@@ -89,19 +89,19 @@ class GMSHVolumeMesh:
     exterior_curve_loop = gmsh.model.occ.addCurveLoop(exterior_curves)
 
     hole_curve_loops = []
-    # for hole in building.geometry[self.lod].holes:
-    #     hole_points = []
-    #     for vertex in hole:
-    #         x, y, z = vertex
-    #         hole_points.append(gmsh.model.occ.addPoint(x, y, 0.0, 0.5))
-    #     holes_points.append(hole_points)
-    #     hole_curves = []
-    #     for i in range(len(hole_points)):
-    #         hole_curves.append(
-    #             gmsh.model.occ.addLine(
-    #                 hole_points[i], hole_points[(i + 1) % len(hole_points)])
-    #         )
-    #     hole_curve_loops.append(gmsh.model.occ.addCurveLoop(hole_curves))
+    for hole in building.geometry[self.lod].holes:
+        hole_points = []
+        for vertex in hole:
+            x, y, z = vertex
+            hole_points.append(gmsh.model.occ.addPoint(x, y, 0.0, 0.5))
+        holes_points.append(hole_points)
+        hole_curves = []
+        for i in range(len(hole_points)):
+            hole_curves.append(
+                gmsh.model.occ.addLine(
+                    hole_points[i], hole_points[(i + 1) % len(hole_points)])
+            )
+        hole_curve_loops.append(gmsh.model.occ.addCurveLoop(hole_curves))
     building_surface_tag = gmsh.model.occ.addPlaneSurface(
         [exterior_curve_loop] + hole_curve_loops)
 

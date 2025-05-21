@@ -8,7 +8,7 @@ import time
 from src.gmshVolumeMesh import GMSHVolumeMesh
 
 
-h = 700.0
+h = 500.0
 parameters = {
     "xmin": 319891,
     "ymin": 6399790,
