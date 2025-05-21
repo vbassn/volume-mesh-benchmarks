@@ -1,7 +1,7 @@
 """Utility to compute mesh quality metrics from Fluent ``.h5`` files.
 
-This module replicates :mod:`paraview_mesh_metrics` but uses the ParaView
-reader for Fluent ``.h5`` case files.  The metrics are computed using
+This module replicates :mod:`paraview_mesh_metrics` but uses ParaView's
+``OpenDataFile`` function to load Fluent ``.h5`` case files.  The metrics are computed using
 ParaView's built-in ``MeshQuality`` filter in the same way as for ``.vtu``
 meshes.
 """
@@ -11,7 +11,7 @@ import argparse
 import json
 
 try:
-    from paraview.simple import FluentReader, MeshQuality, Delete
+    from paraview.simple import OpenDataFile, MeshQuality, Delete
     from paraview.servermanager import Fetch
 except ModuleNotFoundError as exc:  # pragma: no cover - ParaView may not be installed
     raise ImportError(
@@ -25,7 +25,7 @@ def _compute_metric(reader: Any, measure: str) -> List[float]:
     Parameters
     ----------
     reader : Any
-        The ParaView reader object for the input Fluent file.
+        The dataset object returned by ``OpenDataFile`` for the input Fluent file.
     measure : str
         Name of the quality measure (e.g. ``'Aspect Ratio'``).
 
@@ -39,8 +39,21 @@ def _compute_metric(reader: Any, measure: str) -> List[float]:
     quality.SaveCellQuality = 1
 
     data = Fetch(quality)
-    array = data.GetCellData().GetArray("Quality")
-    values = [array.GetValue(i) for i in range(array.GetNumberOfTuples())]
+
+    arrays = []
+    if hasattr(data, "GetCellData"):
+        arr = data.GetCellData().GetArray("Quality")
+        arrays.append(arr)
+    elif hasattr(data, "GetNumberOfBlocks"):
+        for i in range(data.GetNumberOfBlocks()):
+            block = data.GetBlock(i)
+            if hasattr(block, "GetCellData"):
+                arr = block.GetCellData().GetArray("Quality")
+                arrays.append(arr)
+
+    values = []
+    for arr in arrays:
+        values.extend([arr.GetValue(i) for i in range(arr.GetNumberOfTuples())])
 
     Delete(quality)
     return values
@@ -60,7 +73,7 @@ def compute_quality_metrics(h5_path: str) -> Dict[str, Any]:
         Dictionary with the statistics for each metric. ``min``/``max``/``avg``
         are provided together with the list of per-cell values.
     """
-    reader = FluentReader(FileName=[h5_path])
+    reader = OpenDataFile(h5_path)
 
     metrics = {}
     for name, key in [
