@@ -35,6 +35,22 @@ def _compute_metric(reader: Any, measure: str) -> List[float]:
         List containing the quality value for each cell in the mesh.
     """
     quality = MeshQuality(Input=reader)
+def _compute_metric(reader: Any, measure: str) -> List[float]:
+    """Internal helper that returns the raw quality values for *measure*.
+
+    Parameters
+    ----------
+    reader : Any
+        The dataset object returned by ``OpenDataFile`` for the input Fluent file.
+    measure : str
+        Name of the quality measure (e.g. ``'Aspect Ratio'``).
+
+    Returns
+    -------
+    List[float]
+        List containing the quality value for each cell in the mesh.
+    """
+    quality = MeshQuality(Input=reader)
 
     try:
         quality.TetQualityMeasure = measure
@@ -60,14 +76,13 @@ def _compute_metric(reader: Any, measure: str) -> List[float]:
     if hasattr(data, "GetNumberOfBlocks"):
         for i in range(data.GetNumberOfBlocks()):
             block = data.GetBlock(i)
-            if block is not None:
+            if block is not None and hasattr(block, "GetCellData"):
                 values.extend(_extract(block))
-    else:
+    elif hasattr(data, "GetCellData"):
         values = _extract(data)
 
     Delete(quality)
     return values
-
 
 def compute_quality_metrics(h5_path: str) -> Dict[str, Any]:
     """Compute aspect ratio, minimum dihedral angle and skewness of a Fluent ``.h5`` file.
