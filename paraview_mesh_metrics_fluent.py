@@ -1,7 +1,7 @@
 """Utility to compute mesh quality metrics from Fluent ``.h5`` files.
 
-This module replicates :mod:`paraview_mesh_metrics` but uses the ParaView
-reader for Fluent ``.h5`` case files.  The metrics are computed using
+This module replicates :mod:`paraview_mesh_metrics` but uses ParaView's
+``OpenDataFile`` function to load Fluent ``.h5`` case files.  The metrics are computed using
 ParaView's built-in ``MeshQuality`` filter in the same way as for ``.vtu``
 meshes.
 """
@@ -11,7 +11,7 @@ import argparse
 import json
 
 try:
-    from paraview.simple import FluentReader, MeshQuality, Delete
+    from paraview.simple import OpenDataFile, MeshQuality, Delete
     from paraview.servermanager import Fetch
 except ModuleNotFoundError as exc:  # pragma: no cover - ParaView may not be installed
     raise ImportError(
@@ -25,7 +25,7 @@ def _compute_metric(reader: Any, measure: str) -> List[float]:
     Parameters
     ----------
     reader : Any
-        The ParaView reader object for the input Fluent file.
+        The dataset object returned by ``OpenDataFile`` for the input Fluent file.
     measure : str
         Name of the quality measure (e.g. ``'Aspect Ratio'``).
 
@@ -35,12 +35,35 @@ def _compute_metric(reader: Any, measure: str) -> List[float]:
         List containing the quality value for each cell in the mesh.
     """
     quality = MeshQuality(Input=reader)
-    quality.TetQualityMeasure = measure
-    quality.SaveCellQuality = 1
+
+    try:
+        quality.TetQualityMeasure = measure
+    except ValueError:  # ParaView 5.13 uses "Skew" instead of "Skewness"
+        if measure == "Skewness":
+            quality.TetQualityMeasure = "Skew"
+        else:
+            raise
+
+    if hasattr(quality, "SaveCellQuality"):
+        try:
+            quality.SaveCellQuality = 1
+        except AttributeError:
+            pass
 
     data = Fetch(quality)
-    array = data.GetCellData().GetArray("Quality")
-    values = [array.GetValue(i) for i in range(array.GetNumberOfTuples())]
+
+    def _extract(ds):
+        arr = ds.GetCellData().GetArray("Quality")
+        return [arr.GetValue(i) for i in range(arr.GetNumberOfTuples())]
+
+    values = []
+    if hasattr(data, "GetNumberOfBlocks"):
+        for i in range(data.GetNumberOfBlocks()):
+            block = data.GetBlock(i)
+            if block is not None:
+                values.extend(_extract(block))
+    else:
+        values = _extract(data)
 
     Delete(quality)
     return values
@@ -60,7 +83,7 @@ def compute_quality_metrics(h5_path: str) -> Dict[str, Any]:
         Dictionary with the statistics for each metric. ``min``/``max``/``avg``
         are provided together with the list of per-cell values.
     """
-    reader = FluentReader(FileName=[h5_path])
+    reader = OpenDataFile(h5_path)
 
     metrics = {}
     for name, key in [

@@ -14,7 +14,7 @@ The repository provides a couple of helper scripts:
   ```
 
 * `paraview_mesh_metrics_fluent.py` offers the same functionality but for
-  Fluent `.h5` files using ParaView's Fluent reader. Invoke it in the same
+  Fluent `.h5` files using ParaView's built-in `OpenDataFile` function. Invoke it in the same
   way by providing the path to the `.h5` file:
 
   ```bash
