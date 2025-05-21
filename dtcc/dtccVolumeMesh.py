@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 # from dtcc import *
 import dtcc
+import time
 
 # FIXME: Obscure imports
 from dtcc_core.builder.model_conversion import (
@@ -88,7 +89,7 @@ subdomain_resolution = [
 # subdomain_resolution = []
 
 
-# FIXME: Should not need to convert from Python to C++.
+timer_begin = time.time()
 
 # Convert from Python to C++
 _footprints = [
@@ -99,6 +100,7 @@ _footprints = [
 
 # FIXME: Pass bounds as argument (not xmin, ymin, xmax, ymax).
 
+timer_ground_mesh_begin = time.time()
 # Build ground mesh
 _ground_mesh = build_ground_mesh(
     _footprints,
@@ -116,6 +118,7 @@ _ground_mesh = build_ground_mesh(
 
 # Convert from C++ to Python
 ground_mesh = builder_mesh_to_mesh(_ground_mesh)
+timer_ground_mesh_end = time.time()
 
 # Save ground mesh to file
 ground_mesh.save(_parameters["output_directory"] / "ground_mesh.vtu")
@@ -130,7 +133,7 @@ _surfaces = [
     if building is not None
 ]
 
-
+timer_volume_mesh_begin = time.time()
 # Create volume mesh builder
 volume_mesh_builder = VolumeMeshBuilder(_surfaces, _dem, _ground_mesh, 100.0)
 
@@ -142,16 +145,30 @@ _volume_mesh = volume_mesh_builder.build(
     _parameters["aspect_ratio_threshold"],
     _parameters["debug_step"],
 )
+timer_volume_mesh_end = time.time()
 
+timer_boundary_mesh_begin = time.time()
 _boundary_mesh = compute_boundary_mesh(_volume_mesh)
-
+timer_boundary_mesh_end = time.time()
 # FIXME: Should not need to convert from C++ to Python
 
 # Convert from C++ to Python
 volume_mesh = builder_volume_mesh_to_volume_mesh(_volume_mesh)
 boundary_mesh = builder_mesh_to_mesh(_boundary_mesh)
 
+timer_end = time.time()
+
+elapsed = timer_ground_mesh_end - timer_ground_mesh_begin
+print(f"Ground Mesh Generation:\t{elapsed:.6f} s.")
+
+elapsed = timer_volume_mesh_end - timer_volume_mesh_begin
+print(f"Volume Mesh Generation:\t{elapsed:.6f} s.")
+
+elapsed = timer_boundary_mesh_end - timer_boundary_mesh_begin
+print(f"Boundary Surface Mesh Extraction:\t{elapsed:.6f} s.")
 
 # Save volume mesh to file
 volume_mesh.save(_parameters["output_directory"] / f"volume_mesh_{_parameters["debug_step"]}.vtu")
 boundary_mesh.save(_parameters["output_directory"] / f"boundary_mesh_{_parameters["debug_step"]}.vtu")
+
+
