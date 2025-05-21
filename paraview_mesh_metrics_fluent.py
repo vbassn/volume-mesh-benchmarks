@@ -35,30 +35,54 @@ def _compute_metric(reader: Any, measure: str) -> List[float]:
         List containing the quality value for each cell in the mesh.
     """
     quality = MeshQuality(Input=reader)
-    quality.TetQualityMeasure = measure
+def _compute_metric(reader: Any, measure: str) -> List[float]:
+    """Internal helper that returns the raw quality values for *measure*.
+
+    Parameters
+    ----------
+    reader : Any
+        The dataset object returned by ``OpenDataFile`` for the input Fluent file.
+    measure : str
+        Name of the quality measure (e.g. ``'Aspect Ratio'``).
+
+    Returns
+    -------
+    List[float]
+        List containing the quality value for each cell in the mesh.
+    """
+    quality = MeshQuality(Input=reader)
+
+    try:
+        quality.TetQualityMeasure = measure
+    except ValueError:  # ParaView 5.13 uses "Skew" instead of "Skewness"
+        if measure == "Skewness":
+            quality.TetQualityMeasure = "Skew"
+        else:
+            raise
+
     if hasattr(quality, "SaveCellQuality"):
-        quality.SaveCellQuality = 1
+        try:
+            quality.SaveCellQuality = 1
+        except AttributeError:
+            pass
 
     data = Fetch(quality)
 
-    arrays = []
-    if hasattr(data, "GetCellData"):
-        arr = data.GetCellData().GetArray("Quality")
-        arrays.append(arr)
-    elif hasattr(data, "GetNumberOfBlocks"):
-        for i in range(data.GetNumberOfBlocks()):
-            block = data.GetBlock(i)
-            if hasattr(block, "GetCellData"):
-                arr = block.GetCellData().GetArray("Quality")
-                arrays.append(arr)
+    def _extract(ds):
+        arr = ds.GetCellData().GetArray("Quality")
+        return [arr.GetValue(i) for i in range(arr.GetNumberOfTuples())]
 
     values = []
-    for arr in arrays:
-        values.extend([arr.GetValue(i) for i in range(arr.GetNumberOfTuples())])
+    if hasattr(data, "GetNumberOfBlocks"):
+        for i in range(data.GetNumberOfBlocks()):
+            block = data.GetBlock(i)
+            if block is not None and hasattr(block, "GetCellData"):
+                values.extend(_extract(block))
+    elif hasattr(data, "GetCellData"):
+        values = _extract(data)
 
     Delete(quality)
     return values
-
 
 def compute_quality_metrics(h5_path: str) -> Dict[str, Any]:
     """Compute aspect ratio, minimum dihedral angle and skewness of a Fluent ``.h5`` file.
