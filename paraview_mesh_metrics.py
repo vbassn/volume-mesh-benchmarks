@@ -6,6 +6,8 @@ filter.
 """
 
 from typing import Dict, Any, List
+import argparse
+import json
 
 try:
     from paraview.simple import XMLUnstructuredGridReader, MeshQuality, Delete
@@ -77,4 +79,20 @@ def compute_quality_metrics(vtu_path: str) -> Dict[str, Any]:
     Delete(reader)
     return metrics
 
+
+def _main() -> None:
+    """Entry point for command line execution."""
+    parser = argparse.ArgumentParser(
+        description="Compute mesh quality metrics for a VTU file using ParaView"
+    )
+    parser.add_argument("mesh", help="Path to the input .vtu mesh file")
+    args = parser.parse_args()
+
+    metrics = compute_quality_metrics(args.mesh)
+    print(json.dumps(metrics, indent=2))
+
+
 __all__ = ["compute_quality_metrics"]
+
+if __name__ == "__main__":  # pragma: no cover - CLI entry point
+    _main()
