@@ -1,10 +1,7 @@
-# TO FIX: Handle buildings with holes as they break the boolean difference 
-# and don't allow for proper volume mesh generation.
-
 import gmsh
 import dtcc
 import numpy as np
-
+from .utils import ensure_ccw, ensure_cw
 
 class GMSHVolumeMesh:
   """
@@ -74,11 +71,13 @@ class GMSHVolumeMesh:
     # Get the building footprint
     building_height = building.attributes["height"]
     ground_height = building.attributes["ground_height"]
-    holes_points = []
 
+    exterior = building.geometry[self.lod].vertices
+    holes = [ensure_cw(h) for h in building.geometry[self.lod].holes]
+    
     exterior_points = []
     exterior_curves = []
-    for vertex in building.geometry[self.lod].vertices:
+    for vertex in exterior:
         x, y, z = vertex
         exterior_points.append(gmsh.model.occ.addPoint(x, y, 0.0, 0.5))
     for i in range(len(exterior_points)):
@@ -88,8 +87,9 @@ class GMSHVolumeMesh:
         )
     exterior_curve_loop = gmsh.model.occ.addCurveLoop(exterior_curves)
 
+    holes_points = []
     hole_curve_loops = []
-    for hole in building.geometry[self.lod].holes:
+    for hole in holes:
         hole_points = []
         for vertex in hole:
             x, y, z = vertex
