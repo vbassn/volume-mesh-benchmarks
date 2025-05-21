@@ -9,6 +9,7 @@ meshes.
 from typing import Dict, Any, List
 import argparse
 import json
+import sys
 
 try:
     from paraview.simple import OpenDataFile, MeshQuality, Delete, Sphere
@@ -19,25 +20,30 @@ except ModuleNotFoundError as exc:  # pragma: no cover - ParaView may not be ins
     ) from exc
 
 
-def print_available_quality_measures():
+def print_available_quality_measures(silent=False):
     """Print the available quality measures for the current ParaView version."""
     # Create a dummy reader and quality filter
     dummy = Sphere()
     quality = MeshQuality(Input=dummy)
     
+    measures = []
     if hasattr(quality, "GetProperty") and hasattr(quality.GetProperty("TetQualityMeasure"), "GetAvailable"):
         measures = quality.GetProperty("TetQualityMeasure").GetAvailable()
-        print("Available TetQualityMeasure values:")
-        for measure in measures:
-            print(f"  - {measure}")
+        if not silent:
+            print("Available TetQualityMeasure values:")
+            for measure in measures:
+                print(f"  - {measure}")
     else:
-        print("Could not determine available TetQualityMeasure values")
+        if not silent:
+            print("Could not determine available TetQualityMeasure values")
     
     Delete(quality)
     Delete(dummy)
+    
+    return measures
 
 
-def _compute_metric(reader: Any, measure: str) -> List[float]:
+def _compute_metric(reader: Any, measure: str, silent=False) -> List[float]:
     """Internal helper that returns the raw quality values for *measure*.
 
     Parameters
@@ -46,6 +52,8 @@ def _compute_metric(reader: Any, measure: str) -> List[float]:
         The dataset object returned by ``OpenDataFile`` for the input Fluent file.
     measure : str
         Name of the quality measure (e.g. ``'Aspect Ratio'``).
+    silent : bool, optional
+        If True, suppress verbose output, by default False
 
     Returns
     -------
@@ -60,20 +68,22 @@ def _compute_metric(reader: Any, measure: str) -> List[float]:
         quality.TetQualityMeasure = measure
     except ValueError as e:
         # If that fails, print available options and try alternative names
-        print(f"Error setting {measure} as TetQualityMeasure: {e}")
+        if not silent:
+            print(f"Error setting {measure} as TetQualityMeasure: {e}")
         
         # Get available options by inspecting the property
         available_measures = []
         if hasattr(quality, "GetProperty") and hasattr(quality.GetProperty("TetQualityMeasure"), "GetAvailable"):
             available_measures = quality.GetProperty("TetQualityMeasure").GetAvailable()
-            print(f"Available TetQualityMeasure options: {available_measures}")
+            if not silent:
+                print(f"Available TetQualityMeasure options: {available_measures}")
         
         # Try common alternatives
         alternatives = {
             "Skewness": ["Skew", "EquiAngleSkew", "EquivolumeSkininess"], 
             "Skew": ["Skewness", "EquiAngleSkew", "EquivolumeSkininess"],
             "Aspect Ratio": ["AspectRatio", "Aspect", "AspectGamma"],
-            "Minimum Dihedral Angle": ["MinDihedralAngle", "DihedralAngle"]
+            "Minimum Dihedral Angle": ["MinDihedralAngle", "DihedralAngle", "Min Angle"]
         }
         
         found = False
@@ -81,7 +91,8 @@ def _compute_metric(reader: Any, measure: str) -> List[float]:
             for alt in alternatives[measure]:
                 try:
                     quality.TetQualityMeasure = alt
-                    print(f"Successfully used alternative: {alt}")
+                    if not silent:
+                        print(f"Successfully used alternative: {alt}")
                     found = True
                     break
                 except ValueError:
@@ -122,13 +133,15 @@ def _compute_metric(reader: Any, measure: str) -> List[float]:
     return values
 
 
-def compute_quality_metrics(h5_path: str) -> Dict[str, Any]:
+def compute_quality_metrics(h5_path: str, silent=False) -> Dict[str, Any]:
     """Compute aspect ratio, minimum dihedral angle and skewness of a Fluent ``.h5`` file.
 
     Parameters
     ----------
     h5_path : str
         Path to the input Fluent ``.h5`` case or data file.
+    silent : bool, optional
+        If True, suppress verbose output, by default False
 
     Returns
     -------
@@ -145,23 +158,27 @@ def compute_quality_metrics(h5_path: str) -> Dict[str, Any]:
         ("Skewness", "skewness"),
     ]:
         try:
-            values = _compute_metric(reader, name)
+            values = _compute_metric(reader, name, silent)
             stats = {
-                "values": values,
                 "min": min(values) if values else None,
                 "max": max(values) if values else None,
                 "avg": sum(values) / len(values) if values else None,
             }
+            # Only include raw values if not in silent mode
+            if not silent:
+                stats["values"] = values
             metrics[key] = stats
         except Exception as e:
-            print(f"Error computing {name}: {e}")
+            if not silent:
+                print(f"Error computing {name}: {e}")
             metrics[key] = {
-                "values": [],
                 "min": None,
                 "max": None,
                 "avg": None,
-                "error": str(e)
             }
+            if not silent:
+                metrics[key]["values"] = []
+                metrics[key]["error"] = str(e)
 
     Delete(reader)
     return metrics
@@ -175,14 +192,53 @@ def _main() -> None:
     parser.add_argument("mesh", help="Path to the input Fluent .h5 file")
     parser.add_argument("--list-measures", action="store_true", 
                       help="List available quality measures and exit")
+    parser.add_argument("--silent", "-s", action="store_true",
+                      help="Suppress verbose output and only show min/max/avg stats")
+    parser.add_argument("--no-values", action="store_true",
+                      help="Don't include raw cell values in the output (smaller JSON)")
+    parser.add_argument("--format", choices=["json", "simple"], default="json",
+                      help="Output format: 'json' (default) or 'simple' for basic text")
     args = parser.parse_args()
     
     if args.list_measures:
-        print_available_quality_measures()
+        print_available_quality_measures(args.silent)
         return
 
-    metrics = compute_quality_metrics(args.mesh)
-    print(json.dumps(metrics, indent=2))
+    # Redirect stdout to /dev/null if in silent mode
+    if args.silent:
+        original_stdout = sys.stdout
+        sys.stdout = open('/dev/null', 'w')
+    
+    try:
+        metrics = compute_quality_metrics(args.mesh, args.silent or args.no_values)
+        
+        # Restore stdout if in silent mode
+        if args.silent:
+            sys.stdout.close()
+            sys.stdout = original_stdout
+        
+        if args.format == "json":
+            print(json.dumps(metrics, indent=2))
+        else:  # simple format
+            print("Mesh Quality Report for:", args.mesh)
+            print("-" * 40)
+            for metric_name, stats in metrics.items():
+                print(f"{metric_name.replace('_', ' ').title()}:")
+                if stats["min"] is not None:
+                    print(f"  Min: {stats['min']:.6f}")
+                    print(f"  Max: {stats['max']:.6f}")
+                    print(f"  Avg: {stats['avg']:.6f}")
+                else:
+                    print("  Failed to compute this metric")
+                print()
+    finally:
+        # Make sure stdout is restored even if an exception occurs
+        if args.silent:
+            try:
+                sys.stdout.close()
+            except:
+                pass
+            sys.stdout = original_stdout
 
 
 __all__ = ["compute_quality_metrics"]
