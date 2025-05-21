@@ -36,7 +36,8 @@ def _compute_metric(reader: Any, measure: str) -> List[float]:
     """
     quality = MeshQuality(Input=reader)
     quality.TetQualityMeasure = measure
-    quality.SaveCellQuality = 1
+    if hasattr(quality, "SaveCellQuality"):
+        quality.SaveCellQuality = 1
 
     data = Fetch(quality)
     array = data.GetCellData().GetArray("Quality")
