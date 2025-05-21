@@ -40,8 +40,21 @@ def _compute_metric(reader: Any, measure: str) -> List[float]:
         quality.SaveCellQuality = 1
 
     data = Fetch(quality)
-    array = data.GetCellData().GetArray("Quality")
-    values = [array.GetValue(i) for i in range(array.GetNumberOfTuples())]
+
+    arrays = []
+    if hasattr(data, "GetCellData"):
+        arr = data.GetCellData().GetArray("Quality")
+        arrays.append(arr)
+    elif hasattr(data, "GetNumberOfBlocks"):
+        for i in range(data.GetNumberOfBlocks()):
+            block = data.GetBlock(i)
+            if hasattr(block, "GetCellData"):
+                arr = block.GetCellData().GetArray("Quality")
+                arrays.append(arr)
+
+    values = []
+    for arr in arrays:
+        values.extend([arr.GetValue(i) for i in range(arr.GetNumberOfTuples())])
 
     Delete(quality)
     return values
