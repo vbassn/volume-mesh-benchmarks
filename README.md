@@ -1,5 +1,9 @@
 # volume-mesh-benchmarks
 
+## Gmsh vs dtcc
+
+George write here
+
 ## Python utilities
 
 The repository provides a couple of helper scripts:
