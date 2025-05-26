@@ -13,6 +13,72 @@ import pickle
 from datetime import datetime
 import json
 
+def _process_vertex_chunk(vertex_chunk, tetrahedra):
+    """Process a chunk of vertices to find potentially adjacent tetrahedra."""
+    candidates = set()
+    
+    for vertex, tet_list in vertex_chunk:
+        # All pairs of tetrahedra sharing this vertex
+        for i in range(len(tet_list)):
+            for j in range(i + 1, len(tet_list)):
+                tet_i, tet_j = tet_list[i], tet_list[j]
+                if tet_i < tet_j:
+                    candidates.add((tet_i, tet_j))
+                else:
+                    candidates.add((tet_j, tet_i))
+    
+    return candidates
+
+
+def _check_adjacency_chunk(edge_chunk, tetrahedra, centroids):
+    """Check which candidate edges are actual adjacencies."""
+    edges = []
+    for i, j in edge_chunk:
+        shared = len(set(tetrahedra[i]).intersection(set(tetrahedra[j])))
+        if shared == 3:  # Face-adjacent
+            dist = np.linalg.norm(centroids[i] - centroids[j])
+            edges.append((i, j, dist))
+    
+    return edges
+
+
+def _process_tetrahedra_batch_parallel(batch, shared_data):
+    """Process a batch of tetrahedra to find adjacent pairs."""
+    start_idx, end_idx = batch
+    centroids = shared_data['centroids']
+    vertex_sets = shared_data['vertex_sets']
+    mesh_points = shared_data['mesh_points']
+    tetrahedra = shared_data['tetrahedra']
+    
+    # Rebuild KD-tree in this process
+    kdtree = KDTree(centroids)
+    
+    edges = []
+    
+    for i in range(start_idx, end_idx):
+        # Estimate search radius
+        vertices_i = mesh_points[tetrahedra[i]]
+        edge_lengths = [np.linalg.norm(vertices_i[j] - vertices_i[k]) 
+                       for j in range(4) for k in range(j+1, 4)]
+        search_radius = np.max(edge_lengths) * 1.5
+        
+        # Find candidates
+        candidates = kdtree.query_ball_point(centroids[i], search_radius)
+        
+        # Check adjacency
+        tet_i_verts = vertex_sets[i]
+        
+        for j in candidates:
+            if j > i:  # Only check each pair once
+                # Check shared vertices
+                shared_vertices = len(tet_i_verts.intersection(vertex_sets[j]))
+                
+                if shared_vertices == 3:  # Adjacent
+                    dist = np.linalg.norm(centroids[i] - centroids[j])
+                    edges.append((i, j, dist))
+    
+    return edges
+
 
 class MLEnhancedPathfinder:
     """
@@ -46,12 +112,591 @@ class MLEnhancedPathfinder:
         
         # Load mesh and build graph
         self.load_mesh(vtu_file)
-        self.build_navigation_graph()
+        self.build_navigation_graph_parallel_fast()
         
         if self.enable_ml:
             self.initialize_ml_models()
     
+    #---
+    def save_path_for_paraview(self, path, filename_base="drone_path"):
+        """
+        Save the path in formats compatible with ParaView visualization.
+        
+        Args:
+            path: List of waypoints (3D coordinates)
+            filename_base: Base filename without extension
+        """
+        if not path:
+            print("No path to save")
+            return
+        
+        path_array = np.array(path)
+        
+        # Method 1: Save as VTK PolyData (recommended)
+        self._save_path_as_vtk(path_array, f"{filename_base}.vtk")
+        
+        # Method 2: Save as VTU (UnstructuredGrid)
+        self._save_path_as_vtu(path_array, f"{filename_base}.vtu")
+        
+        # Method 3: Save as CSV (can be imported to ParaView)
+        self._save_path_as_csv(path_array, f"{filename_base}.csv")
+        
+        # Method 4: Save as PLY (simple format)
+        self._save_path_as_ply(path_array, f"{filename_base}.ply")
+
+    def _save_path_as_vtk(self, path_array, filename):
+        """Save path as VTK PolyData with lines."""
+        with open(filename, 'w') as f:
+            # VTK header
+            f.write("# vtk DataFile Version 3.0\n")
+            f.write("Drone Path\n")
+            f.write("ASCII\n")
+            f.write("DATASET POLYDATA\n")
+            
+            # Points
+            n_points = len(path_array)
+            f.write(f"POINTS {n_points} float\n")
+            for point in path_array:
+                f.write(f"{point[0]} {point[1]} {point[2]}\n")
+            
+            # Lines connecting the points
+            f.write(f"\nLINES 1 {n_points + 1}\n")
+            f.write(f"{n_points}")
+            for i in range(n_points):
+                f.write(f" {i}")
+            f.write("\n")
+            
+            # Add scalar data (e.g., altitude)
+            f.write(f"\nPOINT_DATA {n_points}\n")
+            f.write("SCALARS altitude float 1\n")
+            f.write("LOOKUP_TABLE default\n")
+            for point in path_array:
+                f.write(f"{point[2]}\n")
+            
+            # Add distance along path
+            f.write("\nSCALARS distance_along_path float 1\n")
+            f.write("LOOKUP_TABLE default\n")
+            distances = [0]
+            for i in range(1, n_points):
+                dist = distances[-1] + np.linalg.norm(path_array[i] - path_array[i-1])
+                distances.append(dist)
+            for d in distances:
+                f.write(f"{d}\n")
+        
+        print(f"Saved path as VTK to {filename}")
+
+    def _save_path_as_vtu(self, path_array, filename):
+        """Save path as VTU using meshio."""
+        import meshio
+        
+        # Create line cells connecting consecutive points
+        lines = []
+        for i in range(len(path_array) - 1):
+            lines.append([i, i + 1])
+        
+        # Create mesh with lines
+        cells = [("line", np.array(lines))]
+        
+        # Add data
+        point_data = {
+            "altitude": path_array[:, 2],
+            "waypoint_index": np.arange(len(path_array))
+        }
+        
+        # Calculate distance along path
+        distances = [0]
+        for i in range(1, len(path_array)):
+            dist = distances[-1] + np.linalg.norm(path_array[i] - path_array[i-1])
+            distances.append(dist)
+        point_data["distance_along_path"] = np.array(distances)
+        
+        mesh = meshio.Mesh(
+            points=path_array,
+            cells=cells,
+            point_data=point_data
+        )
+        
+        meshio.write(filename, mesh)
+        print(f"Saved path as VTU to {filename}")
+
+    def _save_path_as_csv(self, path_array, filename):
+        """Save path as CSV file."""
+        import csv
+        
+        with open(filename, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['X', 'Y', 'Z', 'WaypointIndex'])
+            
+            for i, point in enumerate(path_array):
+                writer.writerow([point[0], point[1], point[2], i])
+        
+        print(f"Saved path as CSV to {filename}")
+        print("  In ParaView: File > Open > Select CSV > Apply")
+        print("  Then: Filters > Table To Points > Set X,Y,Z columns > Apply")
+
+    def _save_path_as_ply(self, path_array, filename):
+        """Save path as PLY file with edges."""
+        with open(filename, 'w') as f:
+            n_vertices = len(path_array)
+            n_edges = n_vertices - 1
+            
+            # PLY header
+            f.write("ply\n")
+            f.write("format ascii 1.0\n")
+            f.write(f"element vertex {n_vertices}\n")
+            f.write("property float x\n")
+            f.write("property float y\n")
+            f.write("property float z\n")
+            f.write(f"element edge {n_edges}\n")
+            f.write("property int vertex1\n")
+            f.write("property int vertex2\n")
+            f.write("end_header\n")
+            
+            # Vertices
+            for point in path_array:
+                f.write(f"{point[0]} {point[1]} {point[2]}\n")
+            
+            # Edges
+            for i in range(n_edges):
+                f.write(f"{i} {i+1}\n")
+        
+        print(f"Saved path as PLY to {filename}")
+
+    def save_path_with_mesh_info(self, path, filename="drone_path_analysis.vtu"):
+        """
+        Save path with additional analysis data for ParaView.
+        Includes safety scores, traversal costs, etc.
+        """
+        import meshio
+        
+        if not path or not self.enable_ml:
+            self._save_path_as_vtu(np.array(path), filename)
+            return
+        
+        path_array = np.array(path)
+        
+        # Create line cells
+        lines = []
+        for i in range(len(path_array) - 1):
+            lines.append([i, i + 1])
+        
+        cells = [("line", np.array(lines))]
+        
+        # Gather analysis data
+        point_data = {
+            "altitude": path_array[:, 2],
+            "waypoint_index": np.arange(len(path_array))
+        }
+        
+        # Add ML predictions if available
+        if self.enable_ml:
+            safety_scores = []
+            for waypoint in path:
+                tet_idx = self.find_containing_tetrahedron(waypoint)
+                if tet_idx is not None:
+                    safety = self.predict_safety_score(tet_idx)
+                    safety_scores.append(safety)
+                else:
+                    safety_scores.append(1.0)
+            
+            point_data["safety_score"] = np.array(safety_scores)
+        
+        # Distance along path
+        distances = [0]
+        for i in range(1, len(path_array)):
+            dist = distances[-1] + np.linalg.norm(path_array[i] - path_array[i-1])
+            distances.append(dist)
+        point_data["distance_along_path"] = np.array(distances)
+        
+        # Cell data (for line segments)
+        if len(lines) > 0:
+            segment_costs = []
+            for i in range(len(path) - 1):
+                cost = np.linalg.norm(path_array[i+1] - path_array[i])
+                segment_costs.append(cost)
+            
+            cell_data = {
+                "line": {
+                    "segment_cost": np.array(segment_costs)
+                }
+            }
+        else:
+            cell_data = None
+        
+        # Create mesh
+        mesh = meshio.Mesh(
+            points=path_array,
+            cells=cells,
+            point_data=point_data,
+            cell_data=cell_data
+        )
+        
+        meshio.write(filename, mesh)
+        print(f"Saved path with analysis data to {filename}")
+
+
+##
+    def add_bounding_box_obstacle(self, bbox, z_range=None, padding=0.0):
+        """
+        Add an obstacle in the form of a bounding box.
+        
+        Args:
+            bbox: Tuple/list of (xmin, ymin, xmax, ymax)
+            z_range: Optional tuple of (zmin, zmax). If None, covers all altitudes
+            padding: Additional padding around the box (meters)
+        """
+        xmin, ymin, xmax, ymax = bbox
+        
+        # Apply padding
+        xmin -= padding
+        ymin -= padding
+        xmax += padding
+        ymax += padding
+        
+        # Determine z range
+        if z_range is None:
+            zmin = self.mesh.points[:, 2].min()
+            zmax = self.mesh.points[:, 2].max()
+        else:
+            zmin, zmax = z_range
+        
+        print(f"Adding bounding box obstacle: X[{xmin:.1f}, {xmax:.1f}], "
+            f"Y[{ymin:.1f}, {ymax:.1f}], Z[{zmin:.1f}, {zmax:.1f}]")
+        
+        # Find all tetrahedra inside or intersecting the box
+        affected_tets = set()
+        removed_edges = []
+        
+        for i in range(len(self.tetrahedra)):
+            centroid = self.centroids[i]
+            
+            # Check if centroid is inside the box
+            if (xmin <= centroid[0] <= xmax and
+                ymin <= centroid[1] <= ymax and
+                zmin <= centroid[2] <= zmax):
+                affected_tets.add(i)
+                
+                # Remove this node from the graph
+                if i in self.graph:
+                    # Store edges before removal for potential restoration
+                    for neighbor in list(self.graph.neighbors(i)):
+                        removed_edges.append((i, neighbor, 
+                                            self.graph[i][neighbor]['weight']))
+                    self.graph.remove_node(i)
+        
+        # Also check tetrahedra that might intersect the box
+        for i in range(len(self.tetrahedra)):
+            if i in affected_tets:
+                continue
+                
+            vertices = self.mesh.points[self.tetrahedra[i]]
+            
+            # Check if any vertex is inside the box
+            for vertex in vertices:
+                if (xmin <= vertex[0] <= xmax and
+                    ymin <= vertex[1] <= ymax and
+                    zmin <= vertex[2] <= zmax):
+                    affected_tets.add(i)
+                    if i in self.graph:
+                        for neighbor in list(self.graph.neighbors(i)):
+                            removed_edges.append((i, neighbor,
+                                                self.graph[i][neighbor]['weight']))
+                        self.graph.remove_node(i)
+                    break
+        
+        # Store obstacle info
+        self.bbox_obstacles = getattr(self, 'bbox_obstacles', [])
+        self.bbox_obstacles.append({
+            'bbox': (xmin, ymin, xmax, ymax),
+            'z_range': (zmin, zmax),
+            'affected_tets': affected_tets,
+            'removed_edges': removed_edges
+        })
+        
+        # Add corner points to obstacle memory for ML
+        corners = [
+            (xmin, ymin, (zmin + zmax) / 2),
+            (xmax, ymin, (zmin + zmax) / 2),
+            (xmin, ymax, (zmin + zmax) / 2),
+            (xmax, ymax, (zmin + zmax) / 2)
+        ]
+        for corner in corners:
+            self.obstacle_memory.add(corner)
+        
+        print(f"Removed {len(affected_tets)} tetrahedra from navigation graph")
+        
+        # Check connectivity
+        if self.graph.number_of_nodes() > 0:
+            n_components = nx.number_connected_components(self.graph)
+            if n_components > 1:
+                print(f"Warning: Graph now has {n_components} disconnected components!")
+
+    def add_multiple_bbox_obstacles(self, obstacles_list):
+        """
+        Add multiple bounding box obstacles at once.
+        
+        Args:
+            obstacles_list: List of obstacle definitions, each can be:
+                - (xmin, ymin, xmax, ymax) for full height
+                - ((xmin, ymin, xmax, ymax), (zmin, zmax)) for specific height
+                - {'bbox': (xmin, ymin, xmax, ymax), 'z_range': (zmin, zmax), 'padding': float}
+        """
+        for obstacle in obstacles_list:
+            if isinstance(obstacle, dict):
+                self.add_bounding_box_obstacle(
+                    obstacle['bbox'],
+                    obstacle.get('z_range'),
+                    obstacle.get('padding', 0.0)
+                )
+            elif isinstance(obstacle, tuple) and len(obstacle) == 2:
+                # Format: (bbox, z_range)
+                self.add_bounding_box_obstacle(obstacle[0], obstacle[1])
+            else:
+                # Format: just bbox
+                self.add_bounding_box_obstacle(obstacle)
+
+    def is_path_blocked_by_bbox(self, start, end, bbox, z_range=None):
+        """
+        Check if a line segment intersects with a bounding box.
+        
+        Args:
+            start: Start point (x, y, z)
+            end: End point (x, y, z)
+            bbox: (xmin, ymin, xmax, ymax)
+            z_range: Optional (zmin, zmax)
+        """
+        xmin, ymin, xmax, ymax = bbox
+        
+        if z_range:
+            zmin, zmax = z_range
+        else:
+            zmin = min(start[2], end[2]) - 1
+            zmax = max(start[2], end[2]) + 1
+        
+        # Simple line-box intersection test
+        # This is a simplified version - for production use, implement
+        # proper 3D line-box intersection
+        
+        # Check if line passes through box in 2D
+        # ... (implement full intersection test if needed)
+        
+        return False  # Simplified for now
+
+    def visualize_with_obstacles(self, path=None, save_as="path_with_obstacles.vtu"):
+        """
+        Save visualization data including bounding box obstacles.
+        """
+        import meshio
+        
+        # Create obstacle visualization data
+        obstacle_points = []
+        obstacle_cells = []
+        
+        if hasattr(self, 'bbox_obstacles'):
+            for obs in self.bbox_obstacles:
+                xmin, ymin, xmax, ymax = obs['bbox']
+                zmin, zmax = obs['z_range']
+                
+                # Create box vertices
+                base_idx = len(obstacle_points)
+                box_vertices = [
+                    [xmin, ymin, zmin], [xmax, ymin, zmin],
+                    [xmax, ymax, zmin], [xmin, ymax, zmin],
+                    [xmin, ymin, zmax], [xmax, ymin, zmax],
+                    [xmax, ymax, zmax], [xmin, ymax, zmax]
+                ]
+                obstacle_points.extend(box_vertices)
+                
+                # Create box edges (12 edges of a box)
+                edges = [
+                    # Bottom face
+                    [base_idx+0, base_idx+1], [base_idx+1, base_idx+2],
+                    [base_idx+2, base_idx+3], [base_idx+3, base_idx+0],
+                    # Top face
+                    [base_idx+4, base_idx+5], [base_idx+5, base_idx+6],
+                    [base_idx+6, base_idx+7], [base_idx+7, base_idx+4],
+                    # Vertical edges
+                    [base_idx+0, base_idx+4], [base_idx+1, base_idx+5],
+                    [base_idx+2, base_idx+6], [base_idx+3, base_idx+7]
+                ]
+                obstacle_cells.extend(edges)
+        
+        # Combine with path if provided
+        if path:
+            path_array = np.array(path)
+            all_points = np.vstack([path_array, np.array(obstacle_points)])
+            
+            # Path lines
+            path_lines = [[i, i+1] for i in range(len(path)-1)]
+            
+            # Adjust obstacle line indices
+            obstacle_lines = [[i+len(path), j+len(path)] for i, j in obstacle_cells]
+            
+            cells = [
+                ("line", np.array(path_lines)),
+                ("line", np.array(obstacle_lines))
+            ]
+            
+            # Create point data
+            point_data = {
+                "is_path": np.concatenate([
+                    np.ones(len(path)),
+                    np.zeros(len(obstacle_points))
+                ])
+            }
+        else:
+            all_points = np.array(obstacle_points)
+            cells = [("line", np.array(obstacle_cells))]
+            point_data = {}
+        
+        # Save mesh
+        mesh = meshio.Mesh(
+            points=all_points,
+            cells=cells,
+            point_data=point_data
+        )
+        
+        meshio.write(save_as, mesh)
+        print(f"Saved obstacles and path to {save_as}")
+
+    def remove_obstacle(self, obstacle_index):
+        """
+        Remove a previously added bounding box obstacle.
+        
+        Args:
+            obstacle_index: Index of the obstacle to remove
+        """
+        if not hasattr(self, 'bbox_obstacles') or obstacle_index >= len(self.bbox_obstacles):
+            print(f"No obstacle at index {obstacle_index}")
+            return
+        
+        obs = self.bbox_obstacles[obstacle_index]
+        
+        # Restore removed edges
+        for i, j, weight in obs['removed_edges']:
+            if i < len(self.tetrahedra) and j < len(self.tetrahedra):
+                self.graph.add_edge(i, j, weight=weight)
+        
+        # Remove from list
+        self.bbox_obstacles.pop(obstacle_index)
+        
+        print(f"Removed obstacle {obstacle_index}, restored {len(obs['removed_edges'])} edges")
+##
     def load_mesh(self, vtu_file: str):
+        """Load the tetrahedral mesh from VTU file."""
+        try:
+            self.mesh = meshio.read(vtu_file)
+            print(f"Loaded mesh with {len(self.mesh.points)} vertices")
+            
+            # Extract tetrahedral cells
+            for cell_block in self.mesh.cells:
+                if cell_block.type == "tetra":
+                    self.tetrahedra = cell_block.data
+                    print(f"Found {len(self.tetrahedra)} tetrahedra")
+                    break
+            
+            if len(self.tetrahedra) == 0:
+                raise ValueError("No tetrahedral cells found in mesh")
+            
+            # Print mesh bounds
+            xmin, ymin, zmin = self.mesh.points.min(axis=0)
+            xmax, ymax, zmax = self.mesh.points.max(axis=0)
+            print(f"Mesh bounds:")
+            print(f"  X: [{xmin:.2f}, {xmax:.2f}] (width: {xmax-xmin:.2f})")
+            print(f"  Y: [{ymin:.2f}, {ymax:.2f}] (height: {ymax-ymin:.2f})")
+            print(f"  Z: [{zmin:.2f}, {zmax:.2f}] (depth: {zmax-zmin:.2f})")
+                
+        except Exception as e:
+            print(f"Error loading mesh: {e}")
+            raise
+
+
+    def __init__(self, vtu_file: str, enable_ml: bool = True, 
+                subdomain: Optional[Dict[str, Tuple[float, float]]] = None):
+        """
+        Initialize the pathfinder with a VTU mesh file.
+        
+        Args:
+            vtu_file: Path to the VTU file containing the tetrahedral mesh
+            enable_ml: Whether to enable ML features
+            subdomain: Optional dictionary defining subdomain bounds
+                    e.g., {'x': (100, 500), 'y': (200, 600), 'z': (0, 100)}
+                    If provided, only tetrahedra within these bounds are used
+        """
+        self.mesh = None
+        self.graph = nx.Graph()
+        self.centroids = []
+        self.kdtree = None
+        self.tetrahedra = []
+        self.enable_ml = enable_ml
+        self.subdomain = subdomain
+        
+        # ML components
+        self.cost_predictor = None
+        self.safety_predictor = None
+        self.cost_scaler = StandardScaler()
+        self.safety_scaler = StandardScaler()
+        self.path_history = []
+        self.obstacle_memory = set()
+        self.wind_predictor = None
+        
+        # Load mesh and build graph
+        self.load_mesh(vtu_file)
+        
+        # Filter mesh if subdomain is specified
+        if self.subdomain:
+            self.filter_mesh_to_subdomain()
+        
+        self.build_navigation_graph_parallel_fast()
+        
+        if self.enable_ml:
+            self.initialize_ml_models()
+
+
+    def filter_mesh_to_subdomain(self):
+        """Filter tetrahedra to only include those within the specified subdomain."""
+        if not self.subdomain:
+            return
+        
+        print(f"\nFiltering mesh to subdomain:")
+        print(f"  X: {self.subdomain.get('x', 'all')}")
+        print(f"  Y: {self.subdomain.get('y', 'all')}")
+        print(f"  Z: {self.subdomain.get('z', 'all')}")
+        
+        # Get bounds
+        x_bounds = self.subdomain.get('x', (-np.inf, np.inf))
+        y_bounds = self.subdomain.get('y', (-np.inf, np.inf))
+        z_bounds = self.subdomain.get('z', (-np.inf, np.inf))
+        
+        # Filter tetrahedra
+        filtered_tetrahedra = []
+        
+        for i, tet in enumerate(self.tetrahedra):
+            # Get centroid of tetrahedron
+            vertices = self.mesh.points[tet]
+            centroid = np.mean(vertices, axis=0)
+            
+            # Check if centroid is within bounds
+            if (x_bounds[0] <= centroid[0] <= x_bounds[1] and
+                y_bounds[0] <= centroid[1] <= y_bounds[1] and
+                z_bounds[0] <= centroid[2] <= z_bounds[1]):
+                filtered_tetrahedra.append(tet)
+        
+        # Update tetrahedra
+        original_count = len(self.tetrahedra)
+        self.tetrahedra = np.array(filtered_tetrahedra)
+        
+        print(f"Filtered from {original_count} to {len(self.tetrahedra)} tetrahedra")
+        print(f"Reduction: {(1 - len(self.tetrahedra)/original_count)*100:.1f}%")
+        
+        if len(self.tetrahedra) == 0:
+            raise ValueError("No tetrahedra found in specified subdomain!")
+
+
+
+    #---
+
+    def load_mesh_old(self, vtu_file: str):
         """Load the tetrahedral mesh from VTU file."""
         try:
             self.mesh = meshio.read(vtu_file)
@@ -529,9 +1174,12 @@ class MLEnhancedPathfinder:
         shared_vertices = len(tet1_verts.intersection(tet2_verts))
         return shared_vertices == 3
     
-    def build_navigation_graph(self):
+
+    def build_navigation_graph_new(self):
+        """Build a navigation graph where nodes are tetrahedra centroids."""
         print("Building navigation graph...")
         
+        # Compute centroids for all tetrahedra
         self.centroids = []
         for i in range(len(self.tetrahedra)):
             centroid = self.compute_tetrahedron_centroid(i)
@@ -539,16 +1187,333 @@ class MLEnhancedPathfinder:
             self.graph.add_node(i, pos=centroid)
         
         self.centroids = np.array(self.centroids)
+        
+        # Build KD-tree for efficient nearest neighbor queries
         self.kdtree = KDTree(self.centroids)
         
-        for i in range(len(self.tetrahedra)):
-            for j in range(i + 1, len(self.tetrahedra)):
-                if self.are_tetrahedra_adjacent(i, j):
-                    dist = np.linalg.norm(self.centroids[i] - self.centroids[j])
-                    self.graph.add_edge(i, j, weight=dist)
+        print(f"Processing {len(self.tetrahedra)} tetrahedra...")
+        
+        # For very large meshes, use a simplified approach without multiprocessing
+        if len(self.tetrahedra) > 100000:
+            print("Large mesh detected, using optimized sequential processing...")
+            
+            edge_count = 0
+            
+            # Process each tetrahedron
+            for i in range(len(self.tetrahedra)):
+                if i % 10000 == 0:
+                    print(f"  Processed {i}/{len(self.tetrahedra)} tetrahedra...")
+                
+                # Get vertices of tetrahedron i
+                tet_i_verts = set(self.tetrahedra[i])
+                
+                # Estimate search radius
+                vertices_i = self.mesh.points[self.tetrahedra[i]]
+                max_edge_length = np.max([np.linalg.norm(vertices_i[j] - vertices_i[k]) 
+                                        for j in range(4) for k in range(j+1, 4)])
+                search_radius = max_edge_length * 2.0
+                
+                # Find nearby tetrahedra
+                candidates = self.kdtree.query_ball_point(self.centroids[i], search_radius)
+                
+                # Check adjacency
+                for j in candidates:
+                    if j > i:  # Only check each pair once
+                        tet_j_verts = set(self.tetrahedra[j])
+                        shared_vertices = len(tet_i_verts.intersection(tet_j_verts))
+                        
+                        if shared_vertices == 3:  # Adjacent
+                            dist = np.linalg.norm(self.centroids[i] - self.centroids[j])
+                            self.graph.add_edge(i, j, weight=dist)
+                            edge_count += 1
+        
+        else:
+            # For smaller meshes, use parallel processing with a different approach
+            from concurrent.futures import ProcessPoolExecutor, as_completed
+            import functools
+            
+            # Create a static function that can be pickled
+            process_func = functools.partial(
+                _process_tetrahedron_batch,
+                tetrahedra=self.tetrahedra,
+                centroids=self.centroids,
+                points=self.mesh.points,
+                kdtree_data=self.centroids  # We'll rebuild KDTree in each process
+            )
+            
+            # Create batches
+            batch_size = max(100, len(self.tetrahedra) // 20)
+            batches = []
+            for i in range(0, len(self.tetrahedra), batch_size):
+                batches.append((i, min(i + batch_size, len(self.tetrahedra))))
+            
+            edge_count = 0
+            
+            # Process batches in parallel
+            with ProcessPoolExecutor(max_workers=4) as executor:
+                futures = {executor.submit(process_func, batch): batch 
+                        for batch in batches}
+                
+                for future in as_completed(futures):
+                    edges = future.result()
+                    for i, j, dist in edges:
+                        self.graph.add_edge(i, j, weight=dist)
+                        edge_count += 1
+                    
+                    batch = futures[future]
+                    print(f"  Completed batch {batch[0]}-{batch[1]}")
         
         print(f"Graph built with {self.graph.number_of_nodes()} nodes and "
-              f"{self.graph.number_of_edges()} edges")
+            f"{edge_count} edges")
+
+
+##
+    def build_navigation_graph_parallel_fast(self):
+        """Ultra-fast parallel graph building using vertex-based adjacency."""
+        print("Building navigation graph (parallel fast mode)...")
+        
+        # Compute centroids
+        self.centroids = np.array([self.compute_tetrahedron_centroid(i) 
+                                for i in range(len(self.tetrahedra))])
+        
+        self.kdtree = KDTree(self.centroids)
+        
+        # Add nodes
+        for i in range(len(self.tetrahedra)):
+            self.graph.add_node(i, pos=self.centroids[i])
+        
+        # Build vertex-to-tetrahedra mapping
+        print("Building vertex mapping...")
+        vertex_to_tets = {}
+        for i, tet in enumerate(self.tetrahedra):
+            for vertex in tet:
+                vertex = int(vertex)  # Ensure it's an int
+                if vertex not in vertex_to_tets:
+                    vertex_to_tets[vertex] = []
+                vertex_to_tets[vertex].append(i)
+        
+        # Parallel processing of vertices
+        from multiprocessing import Pool, cpu_count
+        import functools
+        
+        n_cores = min(cpu_count(), 8)
+        vertex_items = list(vertex_to_tets.items())
+        chunk_size = max(100, len(vertex_items) // (n_cores * 10))
+        
+        chunks = []
+        for i in range(0, len(vertex_items), chunk_size):
+            chunks.append(vertex_items[i:i + chunk_size])
+        
+        print(f"Processing {len(vertex_items)} vertices in {len(chunks)} chunks using {n_cores} cores...")
+        
+        # Process chunks in parallel
+        process_func = functools.partial(_process_vertex_chunk, 
+                                    tetrahedra=self.tetrahedra)
+        
+        edge_candidates = set()
+        with Pool(processes=n_cores) as pool:
+            for candidates in pool.imap(process_func, chunks):
+                edge_candidates.update(candidates)
+        
+        print(f"Checking {len(edge_candidates)} candidate edges for adjacency...")
+        
+        # Check which pairs are actually adjacent (parallel)
+        edge_list = list(edge_candidates)
+        edge_chunks = []
+        chunk_size = max(1000, len(edge_list) // (n_cores * 10))
+        
+        for i in range(0, len(edge_list), chunk_size):
+            edge_chunks.append(edge_list[i:i + chunk_size])
+        
+        check_func = functools.partial(_check_adjacency_chunk,
+                                    tetrahedra=self.tetrahedra,
+                                    centroids=self.centroids)
+        
+        all_edges = []
+        with Pool(processes=n_cores) as pool:
+            for edges in pool.imap(check_func, edge_chunks):
+                all_edges.extend(edges)
+        
+        # Add edges to graph
+        edge_count = 0
+        for i, j, dist in all_edges:
+            self.graph.add_edge(i, j, weight=dist)
+            edge_count += 1
+        
+        print(f"Graph built with {self.graph.number_of_nodes()} nodes and "
+            f"{edge_count} edges")
+
+
+    # Module-level functions for parallel processing
+    def _process_vertex_chunk(vertex_chunk, tetrahedra):
+        """Process a chunk of vertices to find potentially adjacent tetrahedra."""
+        candidates = set()
+        
+        for vertex, tet_list in vertex_chunk:
+            # All pairs of tetrahedra sharing this vertex
+            for i in range(len(tet_list)):
+                for j in range(i + 1, len(tet_list)):
+                    tet_i, tet_j = tet_list[i], tet_list[j]
+                    if tet_i < tet_j:
+                        candidates.add((tet_i, tet_j))
+                    else:
+                        candidates.add((tet_j, tet_i))
+        
+        return candidates
+
+
+    def _check_adjacency_chunk(edge_chunk, tetrahedra, centroids):
+        """Check which candidate edges are actual adjacencies."""
+        import numpy as np
+        
+        edges = []
+        for i, j in edge_chunk:
+            shared = len(set(tetrahedra[i]).intersection(set(tetrahedra[j])))
+            if shared == 3:  # Face-adjacent
+                dist = np.linalg.norm(centroids[i] - centroids[j])
+                edges.append((i, j, dist))
+        
+        return edges
+    ##
+# -
+    def build_navigation_graph_parallel_optimal(self):
+        """Build a navigation graph where nodes are tetrahedra centroids."""
+        print("Building navigation graph with optimal parallel...")
+        
+        # Compute centroids for all tetrahedra
+        self.centroids = []
+        for i in range(len(self.tetrahedra)):
+            centroid = self.compute_tetrahedron_centroid(i)
+            self.centroids.append(centroid)
+            self.graph.add_node(i, pos=centroid)
+        
+        self.centroids = np.array(self.centroids)
+    
+        # Build KD-tree for efficient nearest neighbor queries
+        self.kdtree = KDTree(self.centroids)
+        
+        print(f"Processing {len(self.tetrahedra)} tetrahedra...")
+        
+        # Use spatial indexing to only check nearby tetrahedra
+        from multiprocessing import Pool, cpu_count
+        
+        def process_tetrahedron(i):
+            """Find adjacent tetrahedra for a single tetrahedron."""
+            # Get the vertices of tetrahedron i
+            tet_i_verts = set(self.tetrahedra[i])
+            
+            # Find nearby tetrahedra using KD-tree
+            # Search radius based on typical tetrahedron size
+            centroid_i = self.centroids[i]
+            
+            # Estimate search radius (adjust based on your mesh)
+            vertices_i = self.mesh.points[self.tetrahedra[i]]
+            max_edge_length = np.max([np.linalg.norm(vertices_i[j] - vertices_i[k]) 
+                                    for j in range(4) for k in range(j+1, 4)])
+            search_radius = max_edge_length * 2.0
+            
+            # Find candidates within radius
+            candidates = self.kdtree.query_ball_point(centroid_i, search_radius)
+            
+            adjacent_edges = []
+            for j in candidates:
+                if j > i:  # Only check each pair once
+                    tet_j_verts = set(self.tetrahedra[j])
+                    shared_vertices = len(tet_i_verts.intersection(tet_j_verts))
+                    
+                    if shared_vertices == 3:  # Adjacent (sharing a face)
+                        dist = np.linalg.norm(centroid_i - self.centroids[j])
+                        adjacent_edges.append((i, j, dist))
+            
+            return adjacent_edges
+        
+        # Process in parallel with progress tracking
+        n_cores = cpu_count()
+        chunk_size = max(100, len(self.tetrahedra) // (n_cores * 10))
+        
+        edge_count = 0
+        
+        # Process in batches to avoid memory issues
+        for batch_start in range(0, len(self.tetrahedra), chunk_size * n_cores):
+            batch_end = min(batch_start + chunk_size * n_cores, len(self.tetrahedra))
+            batch_indices = list(range(batch_start, batch_end))
+            
+            if batch_start % (chunk_size * n_cores * 10) == 0:
+                print(f"  Processed {batch_start}/{len(self.tetrahedra)} tetrahedra...")
+            
+            with Pool(processes=n_cores) as pool:
+                batch_results = pool.map(process_tetrahedron, batch_indices)
+            
+            # Add edges from this batch
+            for edges in batch_results:
+                for i, j, dist in edges:
+                    self.graph.add_edge(i, j, weight=dist)
+                    edge_count += 1
+        
+        print(f"Graph built with {self.graph.number_of_nodes()} nodes and "
+            f"{edge_count} edges")
+# -
+
+    #----
+    def build_navigation_graph_parallel(self):
+    #Build a navigation graph where nodes are tetrahedra centroids.
+        print("Building navigation graph in parallel...")
+    
+    # Compute centroids for all tetrahedra
+        self.centroids = []
+        for i in range(len(self.tetrahedra)):
+            print(f"Processing tetrahedron {i+1}/{len(self.tetrahedra)}")
+            centroid = self.compute_tetrahedron_centroid(i)
+            self.centroids.append(centroid)
+            self.graph.add_node(i, pos=centroid)
+    
+        self.centroids = np.array(self.centroids)
+    
+        # Build KD-tree for efficient nearest neighbor queries
+        self.kdtree = KDTree(self.centroids)
+    
+        # Parallel adjacency checking
+        from multiprocessing import Pool, cpu_count
+        import itertools
+    
+        # Generate all pairs to check
+        n_tets = len(self.tetrahedra)
+        pairs = [(i, j) for i in range(n_tets) for j in range(i + 1, n_tets)]
+    
+        #Function to check adjacency for a batch of pairs
+        def check_adjacency_batch(pair_batch):
+            adjacent_pairs = []
+            for i, j in pair_batch:
+                tet1_verts = set(self.tetrahedra[i])
+                tet2_verts = set(self.tetrahedra[j])
+                shared_vertices = len(tet1_verts.intersection(tet2_verts))
+                if shared_vertices == 3:  # Adjacent if sharing a face (3 vertices)
+                    dist = np.linalg.norm(self.centroids[i] - self.centroids[j])
+                    adjacent_pairs.append((i, j, dist))
+            return adjacent_pairs
+    
+        # Split pairs into chunks for parallel processing
+        n_cores = cpu_count()
+        chunk_size = max(1, len(pairs) // (n_cores * 10))  # 10 chunks per core
+        pair_chunks = [pairs[i:i + chunk_size] for i in range(0, len(pairs), chunk_size)]
+    
+        print(f"Checking {len(pairs)} potential edges using {n_cores} cores...")
+    
+        # Process in parallel
+        with Pool(processes=n_cores) as pool:
+            results = pool.map(check_adjacency_batch, pair_chunks)
+    
+        # Add edges to graph
+        edge_count = 0
+        for batch_result in results:
+            for i, j, dist in batch_result:
+                self.graph.add_edge(i, j, weight=dist)
+                edge_count += 1
+    
+        print(f"Graph built with {self.graph.number_of_nodes()} nodes and "
+            f"{edge_count} edges")
+    #----
+
     
     def find_nearest_tetrahedron(self, point: np.ndarray) -> int:
         _, idx = self.kdtree.query(point)
@@ -621,6 +1586,7 @@ if __name__ == "__main__":
     # Find ML-optimized path
     start = np.array([0.1, 0.1, 0.1])
     goal = np.array([0.9, 0.9, 0.9])
+    
     
     # Compare standard and ML paths
     print("\nFinding ML-enhanced path...")

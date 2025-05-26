@@ -1,11 +1,10 @@
+#!/usr/bin/python3
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import meshio
 from matplotlib.colors import Normalize
 import matplotlib.cm as cm
-
-
 
 # First, let's create a sample city mesh for demonstration
 def create_sample_city_mesh():
@@ -455,12 +454,25 @@ if __name__ == "__main__":
     # Initialize pathfinder
     from pathfinder_ML import MLEnhancedPathfinder  # Your pathfinder class
     
-    pathfinder = MLEnhancedPathfinder("city_with_buildings.vtu", enable_ml=True)
+    # Example 4: Load only low altitude region
+    low_altitude = {
+    'z': (50,90 )  # Only tetrahedra below 50m altitude
+    }
+
+    pathfinder = MLEnhancedPathfinder("../../../volume_mesh_dtcc.vtu", enable_ml=False, subdomain=low_altitude)
     
     # Find a path
-    start = np.array([10, 10, 25])
-    goal = np.array([90, 90, 35])
+    start = np.array([319891.00, 6399790.00, 25])
+    goal = np.array([320390.00, 6400280.00, 65])
     
+    
+    #X: [319891.00, 320391.00] (width: 500.00)
+    #Y: [6399790.00, 6400290.00] (height: 500.00)
+    #Z: [-0.50, 100.00] (depth: 100.50)
+    building = (319895.00, 6399795.00, 319895.0+50, 6399795.0+50)  # xmin, ymin, xmax, ymax
+    pathfinder.add_bounding_box_obstacle(building,z_range=(30, 60))  # Add a building obstacle
+
+
     print("Finding path...")
     path = pathfinder.find_path_ml(start, goal, safety_weight=0.5)
     
@@ -469,10 +481,11 @@ if __name__ == "__main__":
         
         # Create comprehensive visualization
         print("Creating visualizations...")
-        visualize_mesh_and_path(pathfinder, path, save_fig=True)
-        
+        #visualize_mesh_and_path(pathfinder, path, save_fig=True)
+        pathfinder.save_path_for_paraview(path, "my_drone_path")
+
         # Create interactive visualization
-        print("Creating interactive view...")
-        create_interactive_visualization(pathfinder, path)
+        #print("Creating interactive view...")
+        #create_interactive_visualization(pathfinder, path)
     else:
         print("No path found!")
