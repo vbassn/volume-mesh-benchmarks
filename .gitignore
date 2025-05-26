@@ -1,6 +1,10 @@
 build
 data/Matrix/*.mtx
 data/RHS/*.mtx
+benchmarks/run_*
+benchmarks/*.csv
+dtcc/*.txt
+dtcc/*.csv
 
 __pycache__
 *.py[cod]
