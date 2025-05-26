@@ -453,13 +453,13 @@ if __name__ == "__main__":
     
     # Initialize pathfinder
     from pathfinder_ML import MLEnhancedPathfinder  # Your pathfinder class
-    
+    from pathfinder_GPU import GPUEnhancedPathfinder  # Your GPU pathfinder class
     # Example 4: Load only low altitude region
     low_altitude = {
     'z': (50,90 )  # Only tetrahedra below 50m altitude
     }
 
-    pathfinder = MLEnhancedPathfinder("../../../volume_mesh_dtcc.vtu", enable_ml=False, subdomain=low_altitude)
+    pathfinder = GPUEnhancedPathfinder("../../../volume_mesh_dtcc.vtu", enable_ml=False, subdomain=low_altitude)
     
     # Find a path
     start = np.array([319891.00, 6399790.00, 25])
