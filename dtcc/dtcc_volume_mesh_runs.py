@@ -7,7 +7,7 @@ import csv
 from pathlib import Path
 import io
 # Import the build_volume_mesh function from your existing module
-from dtccVolumeMesh import build_volume_mesh
+from build_volume_mesh import build_volume_mesh
 from utils import parse_mesh_report_txt
 
 
