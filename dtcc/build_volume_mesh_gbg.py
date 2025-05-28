@@ -3,15 +3,13 @@
 import dtcc
 from build_volume_mesh import build_volume_mesh
 
-# Set parameters (Helsingborg)
-parameters = {}
-xmin = 319891
-ymin = 6399790
-xmax = 319891 + 400.0
-ymax = 6399790 + 400.0
+# Poseidon (57.6971779, 11.9795910)
+x0 = 319995.962899
+y0 = 6399009.716755
+L = 500.0
 
 # Define bounds
-bounds = dtcc.Bounds(xmin, ymin, xmax, ymax)
+bounds = dtcc.Bounds(x0 - 0.5 * L, y0 - 0.5 * L, x0 + 0.5 * L, y0 + 0.5 * L)
 
 # Download pointcloud and building footprints
 pointcloud = dtcc.download_pointcloud(bounds=bounds)
