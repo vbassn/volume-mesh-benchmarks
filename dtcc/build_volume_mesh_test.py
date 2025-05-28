@@ -9,6 +9,7 @@ xmin = 319891
 ymin = 6399790
 xmax = 319891 + 100.0  # 400.0
 ymax = 6399790 + 100.0  # 400.0
+
 parameters["domain_height"] = 150.0
 parameters["max_mesh_size"] = 10
 parameters["min_mesh_angle"] = 30

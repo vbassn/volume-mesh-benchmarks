@@ -1,3 +1,5 @@
+from typing import List
+
 import dtcc
 
 
@@ -17,7 +19,9 @@ from dtcc_core.builder._dtcc_builder import (
 )
 
 
-def build_volume_mesh(pointcloud, buildings):
+def build_volume_mesh(
+    pointcloud: dtcc.PointCloud, buildings: List[dtcc.Building]
+) -> dtcc.VolumeMesh:
 
     # FIXME: Where do we set these parameters?
     domain_height = 100.0
