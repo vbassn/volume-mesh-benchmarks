@@ -20,11 +20,12 @@ from dtcc_core.builder._dtcc_builder import (
 
 
 def build_volume_mesh(
-    pointcloud: dtcc.PointCloud, buildings: List[dtcc.Building]
+    pointcloud: dtcc.PointCloud,
+    buildings: List[dtcc.Building],
+    domain_height: float = 100.0,
 ) -> dtcc.VolumeMesh:
 
     # FIXME: Where do we set these parameters?
-    domain_height = 100.0
     max_mesh_size = 10
     min_mesh_angle = 30
     smoother_max_iterations = 5000

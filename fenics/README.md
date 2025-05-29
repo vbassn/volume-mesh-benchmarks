@@ -12,4 +12,6 @@ Install FEniCSx:
 
 Activate Conda:
 
-    source ~/miniconda3/bin/activate
+    (source ~/miniconda3/bin/activate)
+
+    conda activate fenicsx-env
