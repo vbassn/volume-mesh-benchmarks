@@ -18,6 +18,7 @@ buildings = dtcc.download_footprints(bounds=bounds)
 
 # Call build_volume_mesh
 volume_mesh = build_volume_mesh(pointcloud, buildings, H)
+print(volume_mesh)
 
 # Save mesh to file
 volume_mesh.save("gbg_volume_mesh.vtu")
