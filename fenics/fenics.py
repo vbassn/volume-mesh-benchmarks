@@ -91,7 +91,22 @@ def plot(u, show=True):
 __all__.extend(["plot"])
 
 
-# --- Saving ---
+# --- Saving and loading ---
+
+
+def load_mesh(filename):
+    """Load a mesh from an XDMF file."""
+    if not filename.endswith(".xdmf"):
+        raise ValueError("Filename must end with .xdmf")
+
+    comm = MPI.COMM_WORLD
+    with XDMFFile(comm, filename, "r") as xdmf_file:
+        mesh = xdmf_file.read_mesh(name="Grid")
+
+    return mesh
+
+
+__all__.extend(["load_mesh"])
 
 
 def _save(self, filename):

@@ -1,14 +1,10 @@
 from fenics import *
 
-
 # Set log level to INFO
 set_log_level(INFO)
 
-# Load volume mesh
-xdmf = XDMFFile(MPI.COMM_WORLD, "../dtcc/gbg_volume_mesh.xdmf", "r")
-mesh = xdmf.read_mesh(name="Grid")
-
-# Create function space
+# Load mesh and create function space
+mesh = load_mesh("../dtcc/gbg_volume_mesh.xdmf")
 V = FunctionSpace(mesh, "Lagrange", 1)
 
 
@@ -19,7 +15,6 @@ def marker(x):
 
 # Define boundary condition
 bc = DirichletBC(V, 0.0, marker)
-
 
 # Define variational problem
 u = TrialFunction(V)
