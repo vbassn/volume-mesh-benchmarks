@@ -30,7 +30,7 @@ problem = LinearProblem(a, L, bcs=[bc], petsc_options=petsc_options)
 uh = problem.solve()
 
 # Save solution to file
-uh.save("gbg_poission_out/solution.xdmf")
+uh.save("gbg_poission_output/solution.xdmf")
 
 # Plot solution
 plot(uh)

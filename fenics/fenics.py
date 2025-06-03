@@ -21,12 +21,12 @@ from dolfinx.io import XDMFFile
 __all__.extend(["XDMFFile"])
 
 # --- DOLFINx fem imports ---
-from dolfinx.fem import Constant, functionspace
+from dolfinx.fem import Constant, Function, functionspace
 from dolfinx.fem.petsc import LinearProblem
 
 FunctionSpace = lambda mesh, family, degree: functionspace(mesh, (family, degree))
 
-__all__.extend(["Constant", "FunctionSpace", "LinearProblem"])
+__all__.extend(["Constant", "Function", "FunctionSpace", "LinearProblem"])
 
 # --- DOLFINx log imports ---
 from dolfinx.log import set_log_level, LogLevel
