@@ -7,12 +7,27 @@ from mpi4py import MPI
 
 __all__.extend(["MPI"])
 
+# --- Numpy imports
+import numpy as np
+
+__all__.extend(["np"])
+
 # --- UFL imports ---
 from ufl import TrialFunction, TestFunction, SpatialCoordinate
 from ufl import dx, ds, inner, grad
+from ufl import exp
 
 __all__.extend(
-    ["TrialFunction", "TestFunction", "SpatialCoordinate", "dx", "ds", "inner", "grad"]
+    [
+        "TrialFunction",
+        "TestFunction",
+        "SpatialCoordinate",
+        "dx",
+        "ds",
+        "inner",
+        "grad",
+        "exp",
+    ]
 )
 
 # --- DOLFINx io imports ---
@@ -29,14 +44,18 @@ FunctionSpace = lambda mesh, family, degree: functionspace(mesh, (family, degree
 __all__.extend(["Constant", "Function", "FunctionSpace", "LinearProblem"])
 
 # --- DOLFINx log imports ---
-from dolfinx.log import set_log_level, LogLevel
+from dolfinx.log import log, set_log_level, LogLevel
 
 DEBUG = LogLevel.DEBUG
 INFO = LogLevel.INFO
 WARNING = LogLevel.WARNING
 ERROR = LogLevel.ERROR
 
-__all__.extend(["set_log_level", "LogLevel", "DEBUG", "INFO", "WARNING", "ERROR"])
+info = lambda message: log(INFO, message)
+
+__all__.extend(
+    ["info", "set_log_level", "LogLevel", "DEBUG", "INFO", "WARNING", "ERROR"]
+)
 
 # --- DOLFINx boundary conditions ---
 from dolfinx.mesh import locate_entities_boundary
@@ -109,26 +128,107 @@ def load_mesh(filename):
 __all__.extend(["load_mesh"])
 
 
-def _save(self, filename):
-    """Decorator to save a dolfinx.fem.Function or dolfinx.mesh.Mesh to an XDMF file."""
+def _save_mesh(mesh, filename):
+    """Save dolfinx Mesh to an XDMF file.
+
+    Args:
+        mesh (dolfinx.mesh.Mesh): The mesh to save.
+        filename (str): Output XDMF filename (should end with .xdmf).
+    """
+
+    info(f"Saving mesh to file {filename}")
 
     if not filename.endswith(".xdmf"):
         raise ValueError("Filename must end with .xdmf")
 
-    # Get the mesh from the function or mesh object
-    if isinstance(self, dolfinx.fem.Function):
-        mesh = self.function_space.mesh
-    elif isinstance(self, dolfinx.mesh.Mesh):
-        mesh = self
-    else:
-        raise TypeError("Object must be a dolfinx.fem.Function or dolfinx.mesh.Mesh")
-
-    # Write mesh and function to XDMF file
     with XDMFFile(mesh.comm, filename, "w") as xdmf_file:
         xdmf_file.write_mesh(mesh)
-        if isinstance(self, dolfinx.fem.Function):
+
+
+def _save_function(self, filename, t=None):
+    """Save Function to an XDMF file (supports time series).
+
+    Args:
+        filename (str): Output XDMF filename (should end with .xdmf).
+        t (float, optional): Current simulation time. If given, writes a time series.
+                             Mesh is written only once when t == 0.
+    """
+
+    info(f"Saving function to file {filename}")
+
+    if not filename.endswith(".xdmf"):
+        raise ValueError("Filename must end with .xdmf")
+
+    mesh = self.function_space.mesh
+    mode = "a" if (t is not None and t > 0) else "w"
+
+    with XDMFFile(mesh.comm, filename, mode) as xdmf_file:
+        if t is None or t == 0:
+            xdmf_file.write_mesh(mesh)
+        if t is None:
             xdmf_file.write_function(self)
+        else:
+            xdmf_file.write_function(self, t)
 
 
-dolfinx.fem.Function.save = _save
-dolfinx.mesh.Mesh.save = _save
+dolfinx.mesh.Mesh.save = _save_mesh
+dolfinx.fem.Function.save = _save_function
+
+
+# --- Mesh bounds and shifting ---
+
+
+def bounds(mesh):
+    """
+    Compute global mesh bounds in parallel (3D).
+
+    Returns:
+        xmin, ymin, zmin, xmax, ymax, zmax
+    """
+    comm = mesh.comm
+    coords = mesh.geometry.x
+
+    local_min = coords.min(axis=0)
+    local_max = coords.max(axis=0)
+
+    global_min = np.zeros(3)
+    global_max = np.zeros(3)
+
+    comm.Allreduce(local_min, global_min, op=MPI.MIN)
+    comm.Allreduce(local_max, global_max, op=MPI.MAX)
+
+    xmin, ymin, zmin = global_min
+    xmax, ymax, zmax = global_max
+
+    return xmin, ymin, zmin, xmax, ymax, zmax
+
+
+def shift_to_origin(mesh):
+    """
+    Shift mesh coordinates so the global minimum (xmin,ymin,zmin)
+    moves to the origin (0,0,0).
+
+    Returns:
+        xmin, ymin, zmin, xmax, ymax, zmax for the shifted mesh
+    """
+
+    info(f"Shifting mesh to origin")
+
+    # Get bounds
+    xmin, ymin, zmin, xmax, ymax, zmax = bounds(mesh)
+
+    # Print old bounds
+    info(f"Original bounds: [{xmin}, {xmax}] x [{ymin}, {ymax}] x [{zmin}, {zmax}]")
+
+    # Shift the mesh coordinates
+    global_min = np.array([xmin, ymin, zmin])
+    mesh.geometry.x[:] -= global_min
+
+    # Print new bounds
+    xmin, ymin, zmin, xmax, ymax, zmax = bounds(mesh)
+    info(f"New bounds: [{xmin}, {xmax}] x [{ymin}, {ymax}] x [{zmin}, {zmax}]")
+
+    return xmin, ymin, zmin, xmax, ymax, zmax
+
+
+__all__.extend(["bounds", "shift_to_origin"])

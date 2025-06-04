@@ -1,6 +1,6 @@
 from fenics import *
 
-# Set log level to INFO
+# More verbose output
 set_log_level(INFO)
 
 # Load mesh and create function space
@@ -8,7 +8,7 @@ mesh = load_mesh("../dtcc/gbg_volume_mesh.xdmf")
 V = FunctionSpace(mesh, "Lagrange", 1)
 
 
-# Define boundary marker
+# Define boundary condition
 def marker(x):
     return near(x[0], 0.0) | near(x[0], 2.0) | True
 
