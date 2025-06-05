@@ -66,10 +66,10 @@ from petsc4py.PETSc import ScalarType
 def DirichletBC(V, value, marker):
     """Create a Dirichlet boundary condition."""
 
-    msh = V.mesh
+    mesh = V.mesh
     tdim = V.mesh.topology.dim
 
-    facets = locate_entities_boundary(msh, dim=tdim - 1, marker=marker)
+    facets = locate_entities_boundary(mesh, dim=tdim - 1, marker=marker)
     dofs = locate_dofs_topological(V=V, entity_dim=tdim - 1, entities=facets)
     bc = dirichletbc(value=ScalarType(value), dofs=dofs, V=V)
 
@@ -175,6 +175,28 @@ dolfinx.mesh.Mesh.save = _save_mesh
 dolfinx.fem.Function.save = _save_function
 
 
+# --- Meshes ---
+
+
+def BoxMesh(xmin, ymin, zmin, xmax, ymax, zmax, nx, ny, nz):
+    """
+    Create a box mesh."
+    """
+
+    domain = [(xmin, ymin, zmin), (xmax, ymax, zmax)]
+    mesh = dolfinx.mesh.create_box(
+        comm=MPI.COMM_WORLD,
+        points=domain,
+        n=(nx, ny, nz),
+        cell_type=dolfinx.mesh.CellType.tetrahedron,
+    )
+
+    return mesh
+
+
+__all__.extend(["BoxMesh"])
+
+
 # --- Mesh bounds and shifting ---
 
 
@@ -230,5 +252,27 @@ def shift_to_origin(mesh):
 
     return xmin, ymin, zmin, xmax, ymax, zmax
 
+
+def _hmin(self):
+    "Compute global minimum cell diameter (mesh size)."
+
+    # Get local cell indices
+    cells = np.arange(
+        self.topology.index_map(self.topology.dim).size_local, dtype=np.int32
+    )
+
+    # Compute cell diameters
+    cell_diameters = self.h(self.topology.dim, cells)
+
+    # Local minimum
+    local_min = np.min(cell_diameters)
+
+    # Global minimum reduction across MPI ranks
+    global_min = self.comm.allreduce(local_min, op=MPI.MIN)
+
+    return global_min
+
+
+dolfinx.mesh.Mesh.hmin = _hmin
 
 __all__.extend(["bounds", "shift_to_origin"])

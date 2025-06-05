@@ -5,22 +5,31 @@ set_log_level(INFO)
 
 # Problem parameters
 c = 1.0
-T = 100.0
-num_steps = 2000
-dt = T / num_steps
+T = 1.0
 
 # Load mesh and shift to origin
 mesh = load_mesh("../dtcc/gbg_volume_mesh.xdmf")
+mesh = BoxMesh(0, 0, 0, 1, 1, 1, 64, 64, 64)
 xmin, ymin, zmin, xmax, ymax, zmax = shift_to_origin(mesh)
+
+
+# Set time step size based on CLF condition
+h = mesh.hmin()
+info(f"hmin = {h :.3g}")
+dt = 0.25 * h / c
+num_steps = round(T / dt + 0.5)
+dt = T / num_steps
+info(f"Using dt = {dt :.3g} and {num_steps} time steps based on CFL condition")
+
 
 # Define source term
 _xmin = np.array((xmin, ymin, zmin))
 _xmax = np.array((xmax, ymax, zmax))
 x0 = 0.5 * (_xmin + _xmax)
 t0 = 0.1
-sigma = 0.1
+sigma = 0.05
 tau = 0.02
-A = 1e5
+A = 100.0
 _x = SpatialCoordinate(mesh)
 _t = Constant(mesh, 0.0)
 r2 = sum((_x[i] - x0[i]) ** 2 for i in range(3))
@@ -57,6 +66,14 @@ k = Constant(mesh, dt**2 * c**2 / 6)
 a = u * v * dx + k * inner(grad(u), grad(v)) * dx
 L = (2 * u_1 - u_0) * v * dx - k * inner(grad(4 * u_1 + u_0), grad(v)) * dx
 L += Constant(mesh, dt**2) * f * v * dx
+
+# Simple formulation (standard leapfrog)
+# a = u * v * dx
+# L = (
+#    (2 * u_1 - u_0) * v * dx
+#    - dt**2 * c**2 * inner(grad(u_1), grad(v)) * dx
+#    + dt**2 * f * v * dx
+# )
 
 # Define linear problem
 direct = {"ksp_type": "preonly", "pc_type": "lu"}
