@@ -23,10 +23,10 @@ def build_volume_mesh(
     pointcloud: dtcc.PointCloud,
     buildings: List[dtcc.Building],
     domain_height: float = 100.0,
+    max_mesh_size: float = 10.0,
 ) -> dtcc.VolumeMesh:
 
     # FIXME: Where do we set these parameters?
-    max_mesh_size = 10
     min_mesh_angle = 30
     smoother_max_iterations = 5000
     smoothing_relative_tolerance = 0.005

@@ -8,6 +8,7 @@ x0 = 319995.962899
 y0 = 6399009.716755
 L = 200.0
 H = 100.0
+h = 5.0
 
 # Define bounds
 bounds = dtcc.Bounds(x0 - 0.5 * L, y0 - 0.5 * L, x0 + 0.5 * L, y0 + 0.5 * L)
@@ -16,8 +17,8 @@ bounds = dtcc.Bounds(x0 - 0.5 * L, y0 - 0.5 * L, x0 + 0.5 * L, y0 + 0.5 * L)
 pointcloud = dtcc.download_pointcloud(bounds=bounds)
 buildings = dtcc.download_footprints(bounds=bounds)
 
-# Call build_volume_mesh
-volume_mesh = build_volume_mesh(pointcloud, buildings, H)
+# Build volume mesh
+volume_mesh = build_volume_mesh(pointcloud, buildings, H, h)
 print(volume_mesh)
 
 # Save mesh to file

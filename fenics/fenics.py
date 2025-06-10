@@ -15,7 +15,7 @@ __all__.extend(["np"])
 # --- UFL imports ---
 from ufl import TrialFunction, TestFunction, SpatialCoordinate
 from ufl import dx, ds, inner, grad
-from ufl import exp
+from ufl import exp, sin, cos
 
 __all__.extend(
     [
@@ -27,6 +27,8 @@ __all__.extend(
         "inner",
         "grad",
         "exp",
+        "sin",
+        "cos",
     ]
 )
 
@@ -58,25 +60,82 @@ __all__.extend(
 )
 
 # --- DOLFINx boundary conditions ---
-from dolfinx.mesh import locate_entities_boundary
+from dolfinx.mesh import locate_entities_boundary, meshtags
 from dolfinx.fem import locate_dofs_topological, dirichletbc
+from ufl import Measure
 from petsc4py.PETSc import ScalarType
 
 
 def DirichletBC(V, value, marker):
     """Create a Dirichlet boundary condition."""
 
+    # Get mesh and topological dimension
     mesh = V.mesh
     tdim = V.mesh.topology.dim
 
+    # Extract facets and dofs
     facets = locate_entities_boundary(mesh, dim=tdim - 1, marker=marker)
     dofs = locate_dofs_topological(V=V, entity_dim=tdim - 1, entities=facets)
+
+    # Create boundary condition
     bc = dirichletbc(value=ScalarType(value), dofs=dofs, V=V)
 
     return bc
 
 
-__all__.extend(["DirichletBC"])
+def NeumannBC(mesh, marker, tag=None, facet_tags=None):
+    """
+    Mark facets selected by *marker* and return a UFL surface
+    measure restricted to them.
+
+    Parameters
+    ----------
+    mesh : dolfinx.mesh.Mesh
+    marker : callable  f(x) -> bool array
+        Geometric predicate evaluated on facet mid-points exactly like
+        in locate_entities_boundary.
+    tag : int, optional
+        Integer tag id to use for the new facets.  If None we pick
+        max(existing)+1 (or 1 if no previous tags).
+    facet_tags : dolfinx.mesh.MeshTags | None
+        Existing facet MeshTags to extend.  If you pass in a tags
+        object, the new facets are appended so you can mix several
+        boundary types.
+
+    Returns
+    -------
+    ds : UFL measure
+    """
+
+    # Get topological dimension
+    tdim = mesh.topology.dim
+
+    # Extract  facets
+    facets = locate_entities_boundary(mesh, dim=tdim - 1, marker=marker)
+
+    # Choose a tag id
+    if tag is None:
+        tag = 1
+        if facet_tags is not None and facet_tags.values.size > 0:
+            tag = int(facet_tags.values.max()) + 1
+
+    # Build / extend MeshTags
+    new_vals = np.full(facets.size, tag, dtype=np.int32)
+    if facet_tags is None:
+        facet_tags = meshtags(mesh, tdim - 1, facets, new_vals)
+    else:
+        all_facets = np.hstack([facet_tags.indices, facets])
+        all_vals = np.hstack([facet_tags.values, new_vals])
+        facet_tags = meshtags(mesh, tdim - 1, all_facets, all_vals)
+
+    # Create surface measure
+    ds = Measure("ds", domain=mesh, subdomain_data=facet_tags)
+    ds = ds(tag)
+
+    return ds
+
+
+__all__.extend(["DirichletBC", "NeumannBC"])
 
 # --- Numpy imports ---
 
