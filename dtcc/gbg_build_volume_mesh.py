@@ -6,7 +6,7 @@ from build_volume_mesh import build_volume_mesh
 # Poseidon (57.6971779, 11.9795910)
 x0 = 319995.962899
 y0 = 6399009.716755
-L = 200.0
+L = 500.0
 H = 100.0
 h = 5.0
 

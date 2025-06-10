@@ -28,17 +28,17 @@ info(f"Using dt = {dt :.3g} and {num_steps} time steps based on CFL condition")
 
 
 # Define source term (a car driving around Poseidon)
+A = 100.0  # amplitude
+R = 10.0  # radius of circle
+tau = 0.5  # time to drive one lap (fast!)
+sigma = 1.0  # extent of source
 _xmin = np.array((xmin, ymin, zmin))
 _xmax = np.array((xmax, ymax, zmax))
 x0 = np.array((0.5 * (xmin + xmax), 0.5 * (ymin + ymax), 0.9 * zmin + 0.1 * zmax))
 t0 = 0.1
-sigma = 1.0
-tau = 0.02
-A = 100.0
 _x = SpatialCoordinate(mesh)
 _t = Constant(mesh, 0.0)
-R = 10.0
-omega = 2 * np.pi / 1.0
+omega = 2 * np.pi / tau
 xc = [x0[0] + R * cos(omega * _t), x0[1] + R * sin(omega * _t), x0[2]]
 r2 = sum((_x[i] - xc[i]) ** 2 for i in range(3))
 f = A * exp(-r2 / (2 * sigma**2))
