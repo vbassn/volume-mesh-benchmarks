@@ -18,18 +18,18 @@ from dtcc_core.builder.model_conversion import (
 from dtcc_core.builder._dtcc_builder import build_ground_mesh, VolumeMeshBuilder, compute_boundary_mesh
 
 # Set parameters
-h = 400.0
+h = 1000.0
 _parameters = {}
 
 
-_parameters["xmin"] = 319891
-_parameters["ymin"] = 6399790
-_parameters["xmax"] = 319891 + h
-_parameters["ymax"] = 6399790 + h
+_parameters["xmin"] = 319891 + h
+_parameters["ymin"] = 6399790 + h
+_parameters["xmax"] = 319891 + 2*h
+_parameters["ymax"] = 6399790 + 2*h
 _parameters["domain_height"] = 150.0
 _parameters["max_mesh_size"] = 10
 _parameters["min_mesh_angle"] = 30
-_parameters["smoother_max_iterations"] = 5000
+_parameters["smoother_max_iterations"] = 1000
 _parameters["smoothing_relative_tolerance"] = 0.005
 _parameters["debug_step"] = 7
 _parameters["aspect_ratio_threshold"] = 10.0
@@ -125,8 +125,6 @@ def build_volume_mesh(parameters:dict | None = None ,save_meshes:bool = True):
     ground_mesh = builder_mesh_to_mesh(_ground_mesh)
     timer_ground_mesh_end = time.time()
 
-    
-
     _dem = raster_to_builder_gridfield(terrain)
 
     # Convert from Python to C++
@@ -138,8 +136,7 @@ def build_volume_mesh(parameters:dict | None = None ,save_meshes:bool = True):
 
     timer_volume_mesh_begin = time.time()
     # Create volume mesh builder
-    volume_mesh_builder = VolumeMeshBuilder(_surfaces, _dem, _ground_mesh, 100.0)
-
+    volume_mesh_builder = VolumeMeshBuilder(_surfaces, _dem, _ground_mesh,_parameters["domain_height"])
     num_buildings = len(_surfaces)
     # Build volume mesh
     _volume_mesh = volume_mesh_builder.build(
@@ -180,6 +177,11 @@ def build_volume_mesh(parameters:dict | None = None ,save_meshes:bool = True):
         volume_mesh.save(parameters["output_directory"] / f"volume_mesh_{parameters["debug_step"]}.vtu")
         boundary_mesh.save(parameters["output_directory"] / f"boundary_mesh_{parameters["debug_step"]}.vtu")
 
+    # volume_mesh.transform.set_translation(-ground_mesh.bounds.xmin, -ground_mesh.bounds.ymin, 0.0)
+
+    # volume_mesh.apply_transform()
+    # print(volume_mesh.transform.offset)
+    # print("Volume Mesh Bounds: ", volume_mesh.bounds)
     return volume_mesh.num_vertices, volume_mesh.num_cells, num_buildings,volume_mesh_elapsed
 
 
