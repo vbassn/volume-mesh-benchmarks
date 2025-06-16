@@ -4,9 +4,9 @@ from fenics import *
 set_log_level(INFO)
 
 # Problem parameters
-c = 323.0
+c = 343.0
 T = 1.0
-skip = 5
+skip = 10
 
 # Load mesh and shift to origin
 mesh = load_mesh("../dtcc/gbg_volume_mesh.xdmf")
@@ -21,27 +21,23 @@ surface_mesh.save("gbg_wave_output/surface_mesh.xdmf")
 # Set time step size based on CLF condition
 h = mesh.hmin()
 info(f"hmin = {h :.3g}")
-dt = 0.1 * h / c  # 0.25 and above blows up
+dt = 0.1 * h / c  # 0.2 and above blows up
 num_steps = round(T / dt + 0.5)
 dt = T / num_steps
 info(f"Using dt = {dt :.3g} and {num_steps} time steps based on CFL condition")
 
 
-# Define source term (a car driving around Poseidon)
-A = 100.0  # amplitude
-R = 10.0  # radius of circle
-tau = 0.5  # time to drive one lap (fast!)
-sigma = 1.0  # extent of source
-_xmin = np.array((xmin, ymin, zmin))
-_xmax = np.array((xmax, ymax, zmax))
+# Define source term
+A = 100.0  # amplitude of source
+sigma = 1.0  # extent of source in space
+tau = 0.05  # extent of source in time
 x0 = np.array((0.5 * (xmin + xmax), 0.5 * (ymin + ymax), 0.9 * zmin + 0.1 * zmax))
 t0 = 0.1
 _x = SpatialCoordinate(mesh)
 _t = Constant(mesh, 0.0)
-omega = 2 * np.pi / tau
-xc = [x0[0] + R * cos(omega * _t), x0[1] + R * sin(omega * _t), x0[2]]
-r2 = sum((_x[i] - xc[i]) ** 2 for i in range(3))
-f = A * exp(-r2 / (2 * sigma**2))
+r2 = sum((_x[i] - x0[i]) ** 2 for i in range(3))
+t2 = (_t - t0) ** 2
+f = A * exp(-r2 / (2 * sigma**2)) * exp(-t2 / (2 * tau**2))
 
 
 # Create function space
@@ -111,7 +107,7 @@ u_2.save("gbg_wave_output/solution.xdmf", t=0.0)
 t = 0.0
 for n in range(num_steps):
     t += dt
-    print(f"t = {t}")
+    info(f"t = {t}: ||x|| = {np.linalg.norm(u_2.x.array[:])}")
 
     # Update time for right-hand side expression
     _t.value = t

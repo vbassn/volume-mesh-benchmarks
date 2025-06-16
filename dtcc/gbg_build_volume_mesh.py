@@ -7,7 +7,7 @@ from build_volume_mesh import build_volume_mesh
 x0 = 319995.962899
 y0 = 6399009.716755
 L = 500.0
-H = 100.0
+H = 50.0
 h = 5.0
 
 # Define bounds
