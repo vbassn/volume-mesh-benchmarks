@@ -2,6 +2,9 @@
 
 __all__ = []
 
+import dolfinx
+import basix
+
 # --- MPI imports --
 from mpi4py import MPI
 
@@ -13,14 +16,22 @@ import numpy as np
 __all__.extend(["np"])
 
 # --- UFL imports ---
-from ufl import TrialFunction, TestFunction, SpatialCoordinate
+from ufl import (
+    TrialFunction,
+    TestFunction,
+    TrialFunctions,
+    TestFunctions,
+    SpatialCoordinate,
+)
 from ufl import dx, ds, inner, grad
-from ufl import exp, sin, cos
+from ufl import exp, sin, cos, sqrt
 
 __all__.extend(
     [
         "TrialFunction",
         "TestFunction",
+        "TrialFunctions",
+        "TestFunctions",
         "SpatialCoordinate",
         "dx",
         "ds",
@@ -29,6 +40,7 @@ __all__.extend(
         "exp",
         "sin",
         "cos",
+        "sqrt",
     ]
 )
 
@@ -38,12 +50,61 @@ from dolfinx.io import XDMFFile
 __all__.extend(["XDMFFile"])
 
 # --- DOLFINx fem imports ---
-from dolfinx.fem import Constant, Function, functionspace
+from dolfinx.fem import Constant, Function, Expression
 from dolfinx.fem.petsc import LinearProblem
 
-FunctionSpace = lambda mesh, family, degree: functionspace(mesh, (family, degree))
 
-__all__.extend(["Constant", "Function", "FunctionSpace", "LinearProblem"])
+def FunctionSpace(mesh, element, degree=None):
+    """
+    Create a function space for the given mesh and element.
+    This is a wrapper around dolfinx.fem.FunctionSpace.
+    """
+
+    # Handle mixed elements
+    if type(element) is tuple:
+        # If element is a tuple, it is a mixed element
+        if degree is not None:
+            raise ValueError("Degree must not be specified for mixed elements.")
+        elements = [
+            basix.ufl.element(el, mesh.basix_cell(), degree) for el, degree in element
+        ]
+        element = basix.ufl.mixed_element(elements)
+    elif isinstance(element, str):
+        # If element is a string, create a Basix element with the specified degree
+        if degree is None:
+            raise ValueError("Degree must be specified for string elements.")
+        element = basix.ufl.element(element, mesh.basix_cell(), degree)
+    else:
+        error("Element must be a tuple of elements or a string with degree.")
+
+    return dolfinx.fem.functionspace(mesh, element)
+
+
+def assemble_matrix(a):
+    return dolfinx.fem.petsc.assemble_matrix(dolfinx.fem.form(a))
+
+
+def interpolate(f, V):
+    """
+    Interpolate a function f into a function space V.
+    This is a wrapper around dolfinx.fem.Function.interpolate.
+    """
+    u = Function(V)
+    u.interpolate(f)
+    return u
+
+
+__all__.extend(
+    [
+        "Constant",
+        "Function",
+        "Expression",
+        "FunctionSpace",
+        "LinearProblem",
+        "assemble_matrix",
+        "interpolate",
+    ]
+)
 
 # --- DOLFINx log imports ---
 from dolfinx.log import log, set_log_level, LogLevel
@@ -54,9 +115,10 @@ WARNING = LogLevel.WARNING
 ERROR = LogLevel.ERROR
 
 info = lambda message: log(INFO, message)
+error = lambda message: log(ERROR, message)
 
 __all__.extend(
-    ["info", "set_log_level", "LogLevel", "DEBUG", "INFO", "WARNING", "ERROR"]
+    ["info", "error", "set_log_level", "LogLevel", "DEBUG", "INFO", "WARNING", "ERROR"]
 )
 
 # --- DOLFINx boundary conditions ---
