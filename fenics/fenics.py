@@ -22,8 +22,9 @@ from ufl import (
     TrialFunctions,
     TestFunctions,
     SpatialCoordinate,
+    CellDiameter,
 )
-from ufl import dx, ds, inner, grad
+from ufl import dx, ds, inner, grad, curl, div
 from ufl import exp, sin, cos, sqrt
 
 __all__.extend(
@@ -33,10 +34,13 @@ __all__.extend(
         "TrialFunctions",
         "TestFunctions",
         "SpatialCoordinate",
+        "CellDiameter",
         "dx",
         "ds",
         "inner",
         "grad",
+        "curl",
+        "div",
         "exp",
         "sin",
         "cos",
@@ -80,8 +84,8 @@ def FunctionSpace(mesh, element, degree=None):
     return dolfinx.fem.functionspace(mesh, element)
 
 
-def assemble_matrix(a):
-    return dolfinx.fem.petsc.assemble_matrix(dolfinx.fem.form(a))
+def assemble_matrix(a, **kwargs):
+    return dolfinx.fem.petsc.assemble_matrix(dolfinx.fem.form(a), **kwargs)
 
 
 def interpolate(f, V):
@@ -197,7 +201,7 @@ def NeumannBC(mesh, marker, tag=None, facet_tags=None):
     return ds
 
 
-__all__.extend(["DirichletBC", "NeumannBC"])
+__all__.extend(["DirichletBC", "NeumannBC", "ScalarType"])
 
 # --- Numpy imports ---
 

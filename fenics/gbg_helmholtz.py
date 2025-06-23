@@ -7,20 +7,20 @@ set_log_level(INFO)
 # Problem parameters
 # ------------------------------------------------------------
 c = 343.0  # speed of sound (m/s)
-f = 2.0  # frequency (Hz)
+f = 4.0  # frequency (Hz)
 k = 2.0 * np.pi * f / c
 
 # ------------------------------------------------------------
 # Geometry
 # ------------------------------------------------------------
-mesh = load_mesh("../dtcc/gbg_volume_mesh.xdmf")
-# mesh = BoxMesh(0, 0, 0, 200, 200, 100, 64, 64, 32)  # for testing
+# mesh = load_mesh("../dtcc/gbg_volume_mesh.xdmf")
+mesh = BoxMesh(0, 0, 0, 200, 200, 100, 64, 64, 32)  # for testing
 xmin, ymin, zmin, xmax, ymax, zmax = shift_to_origin(mesh)
 
 # Shift and save surface mesh for visualization (optional)
-surface_mesh = load_mesh("../dtcc/gbg_surface_mesh.xdmf")
-shift_to_origin(surface_mesh)
-surface_mesh.save("gbg_helmholtz_output/surface_mesh.xdmf")
+# surface_mesh = load_mesh("../dtcc/gbg_surface_mesh.xdmf")
+# shift_to_origin(surface_mesh)
+# surface_mesh.save("gbg_helmholtz_output/surface_mesh.xdmf")
 
 # ------------------------------------------------------------
 # Check if we resolve the wavelength
@@ -80,6 +80,24 @@ a = (
 L = -s * q_re * dx
 
 # ------------------------------------------------------------
+# GLS stabilisation
+# ------------------------------------------------------------
+tau = 0.0
+if tau > 0.0:
+
+    h_K = CellDiameter(mesh)
+    tau = 0.1 * h_K**2
+
+    r_p_re = div(grad(p_re)) + k**2 * p_re
+    r_p_im = div(grad(p_im)) + k**2 * p_im
+    r_q_re = div(grad(q_re)) + k**2 * q_re
+    r_q_im = div(grad(q_im)) + k**2 * q_im
+
+    a += tau * (r_p_re * r_q_re + r_p_im * r_q_im) * dx
+    L += -tau * s * r_q_re * dx
+
+
+# ------------------------------------------------------------
 # Shifted form for preconditioning
 # ------------------------------------------------------------
 alpha = 0.2
@@ -105,7 +123,7 @@ opts = {
     "ksp_converged_reason": None,
     "ksp_type": "fgmres",
     "ksp_rtol": 1.0e-6,
-    # "ksp_max_it": 100,
+    "ksp_max_it": 25,
     "ksp_gmres_restart": 100,
     "pc_type": "hypre",
     "pc_hypre_type": "boomeramg",
@@ -113,15 +131,22 @@ opts = {
     "pc_hypre_boomeramg_max_iter": 4,
     "pc_hypre_boomeramg_coarsen_type": "HMIS",
     "pc_hypre_boomeramg_interp_type": "ext+i",
-    "pc_hypre_boomeramg_strong_threshold": 0.25,
+    "pc_hypre_boomeramg_strong_threshold": 0.5,
     "pc_hypre_boomeramg_agg_nl": 1,
 }
 
+# FIXME: Wrap this and move up to top
+from dolfinx import fem
+
+dofs_anchor = np.array([0], dtype=np.int32)
+bc_anchor = fem.dirichletbc(ScalarType(0.0), dofs_anchor, W.sub(0))
+bcs = [bc_anchor]
+
 # Set up linear problem
-problem = LinearProblem(a, L, bcs=[], petsc_options=opts)
+problem = LinearProblem(a, L, bcs=bcs, petsc_options=opts)
 
 # Add preconditioner
-A_pc = assemble_matrix(a_pc)
+A_pc = assemble_matrix(a_pc, bcs=bcs)
 A_pc.assemble()
 problem.solver.setOperators(problem.A, A_pc)
 
