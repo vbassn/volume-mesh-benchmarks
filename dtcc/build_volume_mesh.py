@@ -16,7 +16,7 @@ from dtcc_core.builder.model_conversion import (
 from dtcc_core.builder._dtcc_builder import (
     build_ground_mesh,
     VolumeMeshBuilder,
-    compute_boundary_face_data,
+    compute_boundary_face_markers,
 )
 import boundary_face_markers
 
@@ -25,7 +25,7 @@ def build_volume_mesh(
     buildings: List[dtcc.Building],
     domain_height: float = 100.0,
     max_mesh_size: float = 10.0,
-    compute_boundary_face_markers: bool = True,
+    boundary_face_markers: bool = True,
 ) -> dtcc.VolumeMesh:
 
     # FIXME: Where do we set these parameters?
@@ -123,8 +123,8 @@ def build_volume_mesh(
     volume_mesh = builder_volume_mesh_to_volume_mesh(_volume_mesh)
 
 
-    if compute_boundary_face_markers:
-        boundary_face_markers = compute_boundary_face_data(_volume_mesh)
+    if boundary_face_markers:
+        boundary_face_markers = compute_boundary_face_markers(_volume_mesh)
         if boundary_face_markers is not None:
             volume_mesh.boundary_markers = boundary_face_markers
     

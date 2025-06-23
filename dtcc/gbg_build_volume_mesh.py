@@ -7,7 +7,7 @@ from utils import extract_meshes_from_boundary_markers,save_mesh_with_boundary_m
 # Poseidon (57.6971779, 11.9795910)
 x0 = 319995.962899
 y0 = 6399009.716755
-L = 500.0
+L = 100.0
 H = 50.0
 h = 5.0
 
@@ -22,11 +22,9 @@ buildings = dtcc.download_footprints(bounds=bounds)
 volume_mesh = build_volume_mesh(pointcloud, buildings, H, h)
 
 # Extract and save boundary meshes
-extract_meshes_from_boundary_markers(volume_mesh, volume_mesh.boundary_markers)
-
-
+# extract_meshes_from_boundary_markers(volume_mesh, volume_mesh.boundary_markers)
 
 # Save mesh to file
 volume_mesh.save("gbg_volume_mesh.vtu")
 volume_mesh.save("gbg_volume_mesh.xdmf")
-volume_mesh.save_boundary_markers("gbg_volume_mesh_with_boundary_markers.vtu")
+
