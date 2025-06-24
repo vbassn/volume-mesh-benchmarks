@@ -139,9 +139,12 @@ def DirichletBC(V, value, marker):
     mesh = V.mesh
     tdim = V.mesh.topology.dim
 
-    # Extract facets and dofs
-    facets = locate_entities_boundary(mesh, dim=tdim - 1, marker=marker)
-    dofs = locate_dofs_topological(V=V, entity_dim=tdim - 1, entities=facets)
+    # Extract dofs if we have a marker function
+    if callable(marker):
+        facets = locate_entities_boundary(mesh, dim=tdim - 1, marker=marker)
+        dofs = locate_dofs_topological(V=V, entity_dim=tdim - 1, entities=facets)
+    else:
+        dofs = np.array(marker, dtype=np.int32)
 
     # Create boundary condition
     bc = dirichletbc(value=ScalarType(value), dofs=dofs, V=V)

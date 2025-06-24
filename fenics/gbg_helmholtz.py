@@ -7,7 +7,7 @@ set_log_level(INFO)
 # Problem parameters
 # ------------------------------------------------------------
 c = 343.0  # speed of sound (m/s)
-f = 4.0  # frequency (Hz)
+f = 5.0  # frequency (Hz)
 k = 2.0 * np.pi * f / c
 
 # ------------------------------------------------------------
@@ -31,6 +31,11 @@ info(f"kh = {k * h :.3g}")
 if k * h > 0.9:
     error(f"Mesh too coarse for {f:.0f} Hz with P1 elements (k h = {k * h:.2f} > 0.9).")
     exit(1)
+
+# ------------------------------------------------------------
+# Function space: mixed (Re, Im) → R²
+# -----------------------------------------------------------
+W = FunctionSpace(mesh, (("Lagrange", 1), ("Lagrange", 1)))
 
 # ------------------------------------------------------------
 # Source term (real-valued)
@@ -57,12 +62,13 @@ def boundary_marker(x):
     )
 
 
+# Neumann condition for absorbing boundary
 ds = NeumannBC(mesh, boundary_marker)
 
-# ------------------------------------------------------------
-# Function space: mixed (Re, Im) → R²
-# -----------------------------------------------------------
-W = FunctionSpace(mesh, (("Lagrange", 1), ("Lagrange", 1)))
+# Dirichlet condition for anchor point (one dof)
+bc = DirichletBC(W.sub(0), 0.0, [0])
+# bcs = [bc] # does not seem to help much
+bcs = []
 
 # ------------------------------------------------------------
 # Variational problem
@@ -80,7 +86,7 @@ a = (
 L = -s * q_re * dx
 
 # ------------------------------------------------------------
-# GLS stabilisation
+# GLS stabilization (does not seem to help much)
 # ------------------------------------------------------------
 tau = 0.0
 if tau > 0.0:
@@ -123,8 +129,7 @@ opts = {
     "ksp_converged_reason": None,
     "ksp_type": "fgmres",
     "ksp_rtol": 1.0e-6,
-    "ksp_max_it": 25,
-    "ksp_gmres_restart": 100,
+    "ksp_max_it": 1000,
     "pc_type": "hypre",
     "pc_hypre_type": "boomeramg",
     "pc_hypre_boomeramg_cycle_type": "W",
@@ -132,15 +137,8 @@ opts = {
     "pc_hypre_boomeramg_coarsen_type": "HMIS",
     "pc_hypre_boomeramg_interp_type": "ext+i",
     "pc_hypre_boomeramg_strong_threshold": 0.5,
-    "pc_hypre_boomeramg_agg_nl": 1,
+    "pc_hypre_boomeramg_agg_nl": 4,
 }
-
-# FIXME: Wrap this and move up to top
-from dolfinx import fem
-
-dofs_anchor = np.array([0], dtype=np.int32)
-bc_anchor = fem.dirichletbc(ScalarType(0.0), dofs_anchor, W.sub(0))
-bcs = [bc_anchor]
 
 # Set up linear problem
 problem = LinearProblem(a, L, bcs=bcs, petsc_options=opts)
