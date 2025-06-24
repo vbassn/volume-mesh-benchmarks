@@ -132,19 +132,45 @@ from ufl import Measure
 from petsc4py.PETSc import ScalarType
 
 
-def DirichletBC(V, value, marker):
-    """Create a Dirichlet boundary condition."""
+def DirichletBC(V, value, condition=None, markers=None, marker_value=None, dofs=None):
+    """Create a Dirichlet boundary condition. Markers can be set in three
+    different ways:
+
+    1. `condition`: a callable function that takes a point
+       and returns True if it is on the boundary.
+
+    2. `markers`: facet tags with integer values, where each value
+       corresponds to a different boundary condition. If you pass in
+       `markers`, you must also specify `marker_value` to select the
+       specific tag.
+
+    3. `dofs`: a list of dof indices that should be constrained.
+    """
 
     # Get mesh and topological dimension
     mesh = V.mesh
     tdim = V.mesh.topology.dim
 
-    # Extract dofs if we have a marker function
-    if callable(marker):
-        facets = locate_entities_boundary(mesh, dim=tdim - 1, marker=marker)
-        dofs = locate_dofs_topological(V=V, entity_dim=tdim - 1, entities=facets)
-    else:
-        dofs = np.array(marker, dtype=np.int32)
+    # Extract dofs if we have a condition
+    if condition is not None:
+        facets = locate_entities_boundary(mesh, dim=tdim - 1, marker=condition)
+        dofs = locate_dofs_topological(V, tdim - 1, facets)
+
+    # Extract dofs if we have markers
+    elif markers is not None:
+        if marker_value is None:
+            raise ValueError(
+                "If markers are provided, marker_value must also be specified."
+            )
+        dofs = locate_dofs_topological(V, tdim - 1, markers.find(marker_value))
+
+    # If dofs are still None, we cannot create a boundary condition
+    if dofs is None:
+        raise ValueError(
+            "Either condition, markers, or dofs must be provided to create a DirichletBC."
+        )
+
+    info(f"Creating DirichletBC with value {value} on {len(dofs)} dofs.")
 
     # Create boundary condition
     bc = dirichletbc(value=ScalarType(value), dofs=dofs, V=V)
@@ -152,7 +178,7 @@ def DirichletBC(V, value, marker):
     return bc
 
 
-def NeumannBC(mesh, marker, tag=None, facet_tags=None):
+def NeumannBC(mesh, condition, tag=None, boundary_markers=None):
     """
     Mark facets selected by *marker* and return a UFL surface
     measure restricted to them.
@@ -160,13 +186,13 @@ def NeumannBC(mesh, marker, tag=None, facet_tags=None):
     Parameters
     ----------
     mesh : dolfinx.mesh.Mesh
-    marker : callable  f(x) -> bool array
+    condition : callable  f(x) -> bool array
         Geometric predicate evaluated on facet mid-points exactly like
         in locate_entities_boundary.
     tag : int, optional
         Integer tag id to use for the new facets.  If None we pick
         max(existing)+1 (or 1 if no previous tags).
-    facet_tags : dolfinx.mesh.MeshTags | None
+    boundary_markers : dolfinx.mesh.MeshTags | None
         Existing facet MeshTags to extend.  If you pass in a tags
         object, the new facets are appended so you can mix several
         boundary types.
@@ -180,25 +206,25 @@ def NeumannBC(mesh, marker, tag=None, facet_tags=None):
     tdim = mesh.topology.dim
 
     # Extract  facets
-    facets = locate_entities_boundary(mesh, dim=tdim - 1, marker=marker)
+    facets = locate_entities_boundary(mesh, dim=tdim - 1, marker=condition)
 
     # Choose a tag id
     if tag is None:
         tag = 1
-        if facet_tags is not None and facet_tags.values.size > 0:
-            tag = int(facet_tags.values.max()) + 1
+        if boundary_markers is not None and boundary_markers.values.size > 0:
+            tag = int(boundary_markers.values.max()) + 1
 
     # Build / extend MeshTags
     new_vals = np.full(facets.size, tag, dtype=np.int32)
     if facet_tags is None:
-        facet_tags = meshtags(mesh, tdim - 1, facets, new_vals)
+        boundary_markers = meshtags(mesh, tdim - 1, facets, new_vals)
     else:
-        all_facets = np.hstack([facet_tags.indices, facets])
-        all_vals = np.hstack([facet_tags.values, new_vals])
-        facet_tags = meshtags(mesh, tdim - 1, all_facets, all_vals)
+        all_facets = np.hstack([boundary_markers.indices, facets])
+        all_vals = np.hstack([boundary_markers.values, new_vals])
+        boundary_markers = meshtags(mesh, tdim - 1, all_facets, all_vals)
 
     # Create surface measure
-    ds = Measure("ds", domain=mesh, subdomain_data=facet_tags)
+    ds = Measure("ds", domain=mesh, subdomain_data=boundary_markers)
     ds = ds(tag)
 
     return ds
@@ -248,12 +274,28 @@ def load_mesh(filename):
 
     comm = MPI.COMM_WORLD
     with XDMFFile(comm, filename, "r") as xdmf_file:
-        mesh = xdmf_file.read_mesh(name="Grid")
+        mesh = xdmf_file.read_mesh(name="mesh")
 
     return mesh
 
 
-__all__.extend(["load_mesh"])
+def load_mesh_with_markers(filename):
+    """Load a mesh with facets from an XDMF file."""
+    if not filename.endswith(".xdmf"):
+        raise ValueError("Filename must end with .xdmf")
+
+    comm = MPI.COMM_WORLD
+    with XDMFFile(comm, filename, "r") as xdmf_file:
+        mesh = xdmf_file.read_mesh(name="mesh")
+        tdim = mesh.topology.dim
+        mesh.topology.create_entities(tdim - 1)
+        mesh.topology.create_connectivity(tdim - 1, tdim)
+        boundary_markers = xdmf_file.read_meshtags(mesh, name="boundary_markers")
+
+    return mesh, boundary_markers
+
+
+__all__.extend(["load_mesh", "load_mesh_with_markers"])
 
 
 def _save_mesh(mesh, filename):
