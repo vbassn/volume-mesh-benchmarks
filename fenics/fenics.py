@@ -165,8 +165,12 @@ def DirichletBC(V, value, condition=None, markers=None, marker_value=None, dofs=
             )
         dofs = locate_dofs_topological(V, tdim - 1, markers.find(marker_value))
 
-    # If dofs are still None, we cannot create a boundary condition
-    if dofs is None:
+    # Extract dofs if we have dofs
+    elif dofs is not None:
+        dofs = np.array(dofs, dtype="int32")
+
+    # Raise error if missing data
+    else:
         raise ValueError(
             "Either condition, markers, or dofs must be provided to create a DirichletBC."
         )
@@ -217,7 +221,7 @@ def NeumannBC(mesh, condition=None, markers=None, marker_value=None):
         new_vals = np.full(facets.size, marker_value, dtype=np.int32)
         markers = meshtags(mesh, tdim - 1, facets, new_vals)
 
-    # If neither condition nor markers are provided, raise an error
+    # Raise error if missing data
     else:
         raise ValueError(
             "Either condition or markers must be provided to create a NeumannBC."

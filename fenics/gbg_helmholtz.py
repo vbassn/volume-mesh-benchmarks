@@ -13,14 +13,8 @@ k = 2.0 * np.pi * f / c
 # ------------------------------------------------------------
 # Geometry
 # ------------------------------------------------------------
-# mesh = load_mesh("../dtcc/gbg_volume_mesh.xdmf")
-mesh = BoxMesh(0, 0, 0, 200, 200, 100, 64, 64, 32)  # for testing
+mesh, markers = load_mesh_with_markers("../dtcc/gbg_volume_mesh.xdmf")
 xmin, ymin, zmin, xmax, ymax, zmax = shift_to_origin(mesh)
-
-# Shift and save surface mesh for visualization (optional)
-# surface_mesh = load_mesh("../dtcc/gbg_surface_mesh.xdmf")
-# shift_to_origin(surface_mesh)
-# surface_mesh.save("gbg_helmholtz_output/surface_mesh.xdmf")
 
 # ------------------------------------------------------------
 # Check if we resolve the wavelength
@@ -47,31 +41,18 @@ _x = SpatialCoordinate(mesh)
 r2 = sum((_x[i] - x0[i]) ** 2 for i in range(3))
 s = A * exp(-r2 / (2 * sigma**2))
 
-
 # ------------------------------------------------------------
 # Boundary conditions
 # ------------------------------------------------------------
-def boundary_marker(x):
-    atol = 1e-3
-    return (
-        near(x[0], xmin, atol=atol)
-        | near(x[0], xmax, atol=atol)
-        | near(x[1], ymin, atol=atol)
-        | near(x[1], ymax, atol=atol)
-        | near(x[2], zmax, atol=atol)
-    )
-
-
-# Neumann condition for absorbing boundary
-ds = NeumannBC(mesh, boundary_marker)
+ds = NeumannBC(mesh, markers=markers, marker_value=[-2, -3, -4, -5, -6])
 
 # Dirichlet condition for anchor point (one dof)
-bc = DirichletBC(W.sub(0), 0.0, [0])
+bc = DirichletBC(W.sub(0), 0.0, dofs=[0])
 # bcs = [bc] # does not seem to help much
 bcs = []
 
 # ------------------------------------------------------------
-# Variational problem
+# Variational problem ()
 # ------------------------------------------------------------
 (p_re, p_im) = TrialFunctions(W)
 (q_re, q_im) = TestFunctions(W)
