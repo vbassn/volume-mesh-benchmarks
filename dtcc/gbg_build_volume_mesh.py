@@ -2,7 +2,6 @@
 
 import dtcc
 from dtcc_core.builder import build_volume_mesh
-# from boundary_face_markers import extract_meshes_from_boundary_markers
 
 # Poseidon (57.6971779, 11.9795910)
 x0 = 319995.962899
@@ -21,11 +20,9 @@ buildings = dtcc.download_footprints(bounds=bounds)
 pointcloud = pointcloud.remove_global_outliers(3)
 
 # Build terrain raster
-terrain = dtcc.build_terrain_raster(
-    pointcloud, cell_size=2, radius=3, ground_only=True
-)
+terrain = dtcc.build_terrain_raster(pointcloud, cell_size=2, radius=3, ground_only=True)
 
-    # Extract roof points
+# Extract roof points
 footprints = dtcc.extract_roof_points(
     buildings, pointcloud, statistical_outlier_remover=True
 )
@@ -39,12 +36,10 @@ city.add_buildings(footprints)
 city.add_terrain(terrain)
 
 # Build volume mesh
-volume_mesh = build_volume_mesh(city=city, 
-                                domain_height=H, 
-                                max_mesh_size=h)
+volume_mesh = build_volume_mesh(city=city, domain_height=H, max_mesh_size=h)
 
-# Extract and save boundary meshes
-# extract_meshes_from_boundary_markers(volume_mesh, volume_mesh.boundary_markers)
+# Offset to origin
+volume_mesh.offset_to_origin()
 
 # Save mesh to file
 volume_mesh.save("gbg_volume_mesh.xdmf")

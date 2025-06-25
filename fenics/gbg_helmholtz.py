@@ -7,14 +7,14 @@ set_log_level(INFO)
 # Problem parameters
 # ------------------------------------------------------------
 c = 343.0  # speed of sound (m/s)
-f = 5.0  # frequency (Hz)
-k = 2.0 * np.pi * f / c
+f = 3.0  # frequency (Hz)
+k = 2.5 * np.pi * f / c
 
 # ------------------------------------------------------------
 # Geometry
 # ------------------------------------------------------------
 mesh, markers = load_mesh_with_markers("../dtcc/gbg_volume_mesh.xdmf")
-xmin, ymin, zmin, xmax, ymax, zmax = shift_to_origin(mesh)
+xmin, ymin, zmin, xmax, ymax, zmax = bounds(mesh)
 
 # ------------------------------------------------------------
 # Check if we resolve the wavelength
@@ -32,7 +32,7 @@ if k * h > 0.9:
 W = FunctionSpace(mesh, (("Lagrange", 1), ("Lagrange", 1)))
 
 # ------------------------------------------------------------
-# Source term (real-valued)
+# Source term
 # ------------------------------------------------------------
 A = 1.0  # amplitude
 sigma = 5.0  # spatial extent (m)

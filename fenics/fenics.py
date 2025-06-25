@@ -399,10 +399,10 @@ def bounds(mesh):
     return xmin, ymin, zmin, xmax, ymax, zmax
 
 
-def shift_to_origin(mesh):
+def offset_to_origin(mesh):
     """
-    Shift mesh coordinates so the global minimum (xmin,ymin,zmin)
-    moves to the origin (0,0,0).
+    Offset mesh coordinates so the global minimum (xmin, ymin, zmin)
+    moves to the origin (0, 0, 0).
 
     Returns:
         xmin, ymin, zmin, xmax, ymax, zmax for the shifted mesh
@@ -449,4 +449,4 @@ def _hmin(self):
 
 dolfinx.mesh.Mesh.hmin = _hmin
 
-__all__.extend(["bounds", "shift_to_origin"])
+__all__.extend(["bounds", "offset_to_origin"])

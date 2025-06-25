@@ -3,7 +3,7 @@ import dtcc
 # Poseidon (57.6971779, 11.9795910)
 x0 = 319995.962899
 y0 = 6399009.716755
-L = 500.0
+L = 100.0
 
 # Define bounds
 bounds = dtcc.Bounds(x0 - 0.5 * L, y0 - 0.5 * L, x0 + 0.5 * L, y0 + 0.5 * L)
@@ -30,6 +30,8 @@ city.add_buildings(buildings, remove_outside_terrain=True)
 # Build surface mesh
 mesh = dtcc.build_surface_mesh(city, lod=dtcc.GeometryType.LOD0)
 
+# Offset to origin
+mesh.offset_to_origin()
+
 # Save mesh to file
-mesh.save("gbg_surface_mesh.vtu")
 mesh.save("gbg_surface_mesh.xdmf")

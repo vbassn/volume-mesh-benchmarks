@@ -50,8 +50,24 @@ L = inner(f, v) * dx
 # ------------------------------------------------------------
 # Linear solver
 # ------------------------------------------------------------
-direct = {"ksp_type": "preonly", "pc_type": "lu"}
-problem = LinearProblem(a, L, bcs=bcs, petsc_options=direct)
+direct = {
+    "ksp_monitor_short": None,
+    "ksp_converged_reason": None,
+    "ksp_type": "preonly",
+    "pc_type": "lu",
+    "pc_factor_mat_solver_type": "mumps",
+}
+
+opts = {
+    "ksp_monitor_short": None,
+    "ksp_converged_reason": None,
+    "ksp_type": "cg",
+    "ksp_rtol": 1.0e-6,
+    "pc_type": "hypre",
+    "pc_hypre_type": "boomeramg",
+}
+
+problem = LinearProblem(a, L, bcs=bcs, petsc_options=opts)
 u = problem.solve()
 
 # ------------------------------------------------------------
