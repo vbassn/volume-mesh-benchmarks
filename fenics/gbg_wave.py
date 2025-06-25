@@ -7,20 +7,14 @@ set_log_level(INFO)
 # Problem parameters
 # ------------------------------------------------------------
 c = 343.0  # speed of sound (m/s)
-T = 1.0  # frequency (Hz)
+T = 1.0  # final time (s)
 skip = 10
 
 # ------------------------------------------------------------
 # Geometry
 # ------------------------------------------------------------
-mesh = load_mesh("../dtcc/gbg_volume_mesh.xdmf")
-# mesh = BoxMesh(0, 0, 0, 200, 200, 100, 64, 64, 32)  # for testing
+mesh, markers = load_mesh_with_markers("../dtcc/gbg_volume_mesh.xdmf")
 xmin, ymin, zmin, xmax, ymax, zmax = shift_to_origin(mesh)
-
-# Shift and save surface mesh for visualization
-surface_mesh = load_mesh("../dtcc/gbg_surface_mesh.xdmf")
-shift_to_origin(surface_mesh)
-surface_mesh.save("gbg_wave_output/surface_mesh.xdmf")
 
 # ------------------------------------------------------------
 # Set time step based on CFL condition
@@ -51,7 +45,6 @@ r2 = sum((_x[i] - x0[i]) ** 2 for i in range(3))
 t2 = (_t - t0) ** 2
 f = A * exp(-r2 / (2 * sigma**2)) * exp(-t2 / (2 * tau**2))
 
-
 # ------------------------------------------------------------
 # Boundary conditions
 #
@@ -61,18 +54,7 @@ f = A * exp(-r2 / (2 * sigma**2)) * exp(-t2 / (2 * tau**2))
 # We use absorbing boundary conditions on the domain bounding box
 # which is implemented as ∂_n u = - (1/c) ∂_t u (Sommerfeld).
 # ------------------------------------------------------------
-def boundary_marker(x):
-    atol = 1e-3
-    return (
-        near(x[0], xmin, atol=atol)
-        | near(x[0], xmax, atol=atol)
-        | near(x[1], ymin, atol=atol)
-        | near(x[1], ymax, atol=atol)
-        | near(x[2], zmax, atol=atol)
-    )
-
-
-ds = NeumannBC(mesh, boundary_marker)
+ds = NeumannBC(mesh, markers=markers, marker_value=[-2, -3, -4, -5, -6])
 
 # ------------------------------------------------------------
 # Initial conditions
@@ -118,7 +100,6 @@ opts = {
     "ksp_converged_reason": None,
     "ksp_type": "cg",
     "ksp_rtol": 1.0e-6,
-    # "ksp_max_it": 100,
     "pc_type": "hypre",
     "pc_hypre_type": "boomeramg",
 }

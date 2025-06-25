@@ -1,8 +1,12 @@
 # Test case for volume mesh
 
 import dtcc
+<<<<<<< HEAD
 from dtcc_core.builder import build_volume_mesh
 
+=======
+from build_volume_mesh import build_volume_mesh
+>>>>>>> f96b57e8ba6823b37486304ee584f7037ca98c6b
 
 # Poseidon (57.6971779, 11.9795910)
 x0 = 319995.962899
@@ -43,10 +47,5 @@ volume_mesh = build_volume_mesh(city=city,
                                 domain_height=H, 
                                 max_mesh_size=h)
 
-# Extract and save boundary meshes
-# extract_meshes_from_boundary_markers(volume_mesh, volume_mesh.boundary_markers)
-
 # Save mesh to file
-volume_mesh.save("gbg_volume_mesh.vtu")
 volume_mesh.save("gbg_volume_mesh.xdmf")
-

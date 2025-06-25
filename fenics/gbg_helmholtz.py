@@ -7,20 +7,20 @@ set_log_level(INFO)
 # Problem parameters
 # ------------------------------------------------------------
 c = 343.0  # speed of sound (m/s)
-f = 2.0  # frequency (Hz)
+f = 5.0  # frequency (Hz)
 k = 2.0 * np.pi * f / c
 
 # ------------------------------------------------------------
 # Geometry
 # ------------------------------------------------------------
-mesh = load_mesh("../dtcc/gbg_volume_mesh.xdmf")
-# mesh = BoxMesh(0, 0, 0, 200, 200, 100, 64, 64, 32)  # for testing
+# mesh = load_mesh("../dtcc/gbg_volume_mesh.xdmf")
+mesh = BoxMesh(0, 0, 0, 200, 200, 100, 64, 64, 32)  # for testing
 xmin, ymin, zmin, xmax, ymax, zmax = shift_to_origin(mesh)
 
 # Shift and save surface mesh for visualization (optional)
-surface_mesh = load_mesh("../dtcc/gbg_surface_mesh.xdmf")
-shift_to_origin(surface_mesh)
-surface_mesh.save("gbg_helmholtz_output/surface_mesh.xdmf")
+# surface_mesh = load_mesh("../dtcc/gbg_surface_mesh.xdmf")
+# shift_to_origin(surface_mesh)
+# surface_mesh.save("gbg_helmholtz_output/surface_mesh.xdmf")
 
 # ------------------------------------------------------------
 # Check if we resolve the wavelength
@@ -31,6 +31,11 @@ info(f"kh = {k * h :.3g}")
 if k * h > 0.9:
     error(f"Mesh too coarse for {f:.0f} Hz with P1 elements (k h = {k * h:.2f} > 0.9).")
     exit(1)
+
+# ------------------------------------------------------------
+# Function space: mixed (Re, Im) → R²
+# -----------------------------------------------------------
+W = FunctionSpace(mesh, (("Lagrange", 1), ("Lagrange", 1)))
 
 # ------------------------------------------------------------
 # Source term (real-valued)
@@ -57,12 +62,13 @@ def boundary_marker(x):
     )
 
 
+# Neumann condition for absorbing boundary
 ds = NeumannBC(mesh, boundary_marker)
 
-# ------------------------------------------------------------
-# Function space: mixed (Re, Im) → R²
-# -----------------------------------------------------------
-W = FunctionSpace(mesh, (("Lagrange", 1), ("Lagrange", 1)))
+# Dirichlet condition for anchor point (one dof)
+bc = DirichletBC(W.sub(0), 0.0, [0])
+# bcs = [bc] # does not seem to help much
+bcs = []
 
 # ------------------------------------------------------------
 # Variational problem
@@ -78,6 +84,24 @@ a = (
 )
 
 L = -s * q_re * dx
+
+# ------------------------------------------------------------
+# GLS stabilization (does not seem to help much)
+# ------------------------------------------------------------
+tau = 0.0
+if tau > 0.0:
+
+    h_K = CellDiameter(mesh)
+    tau = 0.1 * h_K**2
+
+    r_p_re = div(grad(p_re)) + k**2 * p_re
+    r_p_im = div(grad(p_im)) + k**2 * p_im
+    r_q_re = div(grad(q_re)) + k**2 * q_re
+    r_q_im = div(grad(q_im)) + k**2 * q_im
+
+    a += tau * (r_p_re * r_q_re + r_p_im * r_q_im) * dx
+    L += -tau * s * r_q_re * dx
+
 
 # ------------------------------------------------------------
 # Shifted form for preconditioning
@@ -105,23 +129,22 @@ opts = {
     "ksp_converged_reason": None,
     "ksp_type": "fgmres",
     "ksp_rtol": 1.0e-6,
-    # "ksp_max_it": 100,
-    "ksp_gmres_restart": 100,
+    "ksp_max_it": 1000,
     "pc_type": "hypre",
     "pc_hypre_type": "boomeramg",
     "pc_hypre_boomeramg_cycle_type": "W",
     "pc_hypre_boomeramg_max_iter": 4,
     "pc_hypre_boomeramg_coarsen_type": "HMIS",
     "pc_hypre_boomeramg_interp_type": "ext+i",
-    "pc_hypre_boomeramg_strong_threshold": 0.25,
-    "pc_hypre_boomeramg_agg_nl": 1,
+    "pc_hypre_boomeramg_strong_threshold": 0.5,
+    "pc_hypre_boomeramg_agg_nl": 4,
 }
 
 # Set up linear problem
-problem = LinearProblem(a, L, bcs=[], petsc_options=opts)
+problem = LinearProblem(a, L, bcs=bcs, petsc_options=opts)
 
 # Add preconditioner
-A_pc = assemble_matrix(a_pc)
+A_pc = assemble_matrix(a_pc, bcs=bcs)
 A_pc.assemble()
 problem.solver.setOperators(problem.A, A_pc)
 

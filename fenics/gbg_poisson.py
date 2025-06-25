@@ -3,34 +3,58 @@ from fenics import *
 # More verbose output
 set_log_level(INFO)
 
-# Load mesh and create function space
-mesh = load_mesh("../dtcc/gbg_volume_mesh.xdmf")
+# ------------------------------------------------------------
+# Geometry
+# ------------------------------------------------------------
+mesh, markers = load_mesh_with_markers("../dtcc/gbg_volume_mesh.xdmf")
+
+# ------------------------------------------------------------
+# Function space
+# -----------------------------------------------------------
 V = FunctionSpace(mesh, "Lagrange", 1)
 
+# -----------------------------------------------------------
+# Get the number of buildings from the boundary markers
+# -----------------------------------------------------------
+max_marker = int(markers.values.max())
+num_buildings = (max_marker + 1) // 2
+info(f"Number of buildings: {num_buildings}")
 
-# Define boundary condition
-def marker(x):
-    return near(x[0], 0.0) | near(x[0], 2.0) | True
+# ------------------------------------------------------------
+# Boundary conditions
+# ------------------------------------------------------------
+bcs = []
 
+# Boundary conditions on the buildings
+for i in range(num_buildings):
+    bc_wall = DirichletBC(V, 1.0, markers=markers, marker_value=i)
+    bc_roof = DirichletBC(V, 1.0, markers=markers, marker_value=2 * i)
+    bcs.append(bc_wall)
+    bcs.append(bc_roof)
 
-# Define boundary condition
-bc = DirichletBC(V, 0.0, marker)
+# Boundary condition on the top (-2) and four walls (-3, -4, -5, -6)
+for i in (-2, -3, -4, -5, -6):
+    bc = DirichletBC(V, 0.0, markers=markers, marker_value=i)
+    bcs.append(bc)
 
-# Define variational problem
+# ------------------------------------------------------------
+# Variational problem
+# ------------------------------------------------------------
 u = TrialFunction(V)
 v = TestFunction(V)
 x = SpatialCoordinate(mesh)
-f = Constant(mesh, 100.0)
+f = Constant(mesh, 0.0)
 a = inner(grad(u), grad(v)) * dx
 L = inner(f, v) * dx
 
-# Solve linear problem
-petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
-problem = LinearProblem(a, L, bcs=[bc], petsc_options=petsc_options)
-uh = problem.solve()
+# ------------------------------------------------------------
+# Linear solver
+# ------------------------------------------------------------
+direct = {"ksp_type": "preonly", "pc_type": "lu"}
+problem = LinearProblem(a, L, bcs=bcs, petsc_options=direct)
+u = problem.solve()
 
-# Save solution to file
-uh.save("gbg_poission_output/solution.xdmf")
-
-# Plot solution
-plot(uh)
+# ------------------------------------------------------------
+# Post-processing & output
+# ------------------------------------------------------------
+u.save("gbg_poisson_output/solution.xdmf")
