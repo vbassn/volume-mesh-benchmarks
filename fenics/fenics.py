@@ -133,8 +133,9 @@ from petsc4py.PETSc import ScalarType
 
 
 def DirichletBC(V, value, condition=None, markers=None, marker_value=None, dofs=None):
-    """Create a Dirichlet boundary condition. Markers can be set in three
-    different ways:
+    """
+    Create a Dirichlet boundary condition (fixed degrees of freedom).
+    Markers can be set in three different ways:
 
     1. `condition`: a callable function that takes a point
        and returns True if it is on the boundary.
@@ -178,54 +179,53 @@ def DirichletBC(V, value, condition=None, markers=None, marker_value=None, dofs=
     return bc
 
 
-def NeumannBC(mesh, condition, tag=None, boundary_markers=None):
+def NeumannBC(mesh, condition=None, markers=None, marker_value=None):
     """
-    Mark facets selected by *marker* and return a UFL surface
-    measure restricted to them.
+    Create a Neumann boundary condition (measure ds on facets).
+    Markers can be set in two different ways:
 
-    Parameters
-    ----------
-    mesh : dolfinx.mesh.Mesh
-    condition : callable  f(x) -> bool array
-        Geometric predicate evaluated on facet mid-points exactly like
-        in locate_entities_boundary.
-    tag : int, optional
-        Integer tag id to use for the new facets.  If None we pick
-        max(existing)+1 (or 1 if no previous tags).
-    boundary_markers : dolfinx.mesh.MeshTags | None
-        Existing facet MeshTags to extend.  If you pass in a tags
-        object, the new facets are appended so you can mix several
-        boundary types.
+    1. `condition`: a callable function that takes a point
+       and returns True if it is on the boundary.
 
-    Returns
-    -------
-    ds : UFL measure
+    2. `markers': facet tags with integer values, where each value
+       corresponds to a different boundary condition. If you pass in
+       `markers`, you must also specify `marker_value` to select the
+       specific tag. Note that `marker_value` may be a tuple of list.
     """
 
     # Get topological dimension
     tdim = mesh.topology.dim
 
-    # Extract  facets
-    facets = locate_entities_boundary(mesh, dim=tdim - 1, marker=condition)
+    # Extract markers (tags) if we have a condition
+    if condition is not None:
+        facets = locate_entities_boundary(mesh, dim=tdim - 1, marker=condition)
+        marker_value = 1
+        new_vals = np.full(facets.size, marker_value, dtype=np.int32)
+        markers = meshtags(mesh, tdim - 1, facets, new_vals)
 
-    # Choose a tag id
-    if tag is None:
-        tag = 1
-        if boundary_markers is not None and boundary_markers.values.size > 0:
-            tag = int(boundary_markers.values.max()) + 1
+    # Extract marker (tags) if we have markers
+    elif markers is not None:
+        if marker_value is None:
+            raise ValueError(
+                "If markers are provided, marker_value must also be specified."
+            )
+        if isinstance(marker_value, tuple) or isinstance(marker_value, list):
+            facets = markers.indices[np.isin(markers.values, marker_value)]
+        else:
+            facets = markers.find(marker_value)
+        marker_value = 1
+        new_vals = np.full(facets.size, marker_value, dtype=np.int32)
+        markers = meshtags(mesh, tdim - 1, facets, new_vals)
 
-    # Build / extend MeshTags
-    new_vals = np.full(facets.size, tag, dtype=np.int32)
-    if facet_tags is None:
-        boundary_markers = meshtags(mesh, tdim - 1, facets, new_vals)
+    # If neither condition nor markers are provided, raise an error
     else:
-        all_facets = np.hstack([boundary_markers.indices, facets])
-        all_vals = np.hstack([boundary_markers.values, new_vals])
-        boundary_markers = meshtags(mesh, tdim - 1, all_facets, all_vals)
+        raise ValueError(
+            "Either condition or markers must be provided to create a NeumannBC."
+        )
 
-    # Create surface measure
-    ds = Measure("ds", domain=mesh, subdomain_data=boundary_markers)
-    ds = ds(tag)
+    # Create surface measure from markers
+    ds = Measure("ds", domain=mesh, subdomain_data=markers)
+    ds = ds(marker_value)
 
     return ds
 
