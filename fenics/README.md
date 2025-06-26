@@ -16,7 +16,7 @@ Activate Conda:
 
     conda activate fenicsx-env
 
-Installing FEniCSx with complex number support:
+Installing FEniCSx with complex number support (didn't work):
 
 conda create -n fenicsx-cmplx \
              -c conda-forge \

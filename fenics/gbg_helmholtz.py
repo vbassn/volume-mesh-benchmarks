@@ -52,7 +52,7 @@ bc = DirichletBC(W.sub(0), 0.0, dofs=[0])
 bcs = []
 
 # ------------------------------------------------------------
-# Variational problem ()
+# Variational problem
 # ------------------------------------------------------------
 (p_re, p_im) = TrialFunctions(W)
 (q_re, q_im) = TestFunctions(W)

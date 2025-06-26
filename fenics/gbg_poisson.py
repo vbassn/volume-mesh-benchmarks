@@ -8,17 +8,17 @@ set_log_level(INFO)
 # ------------------------------------------------------------
 mesh, markers = load_mesh_with_markers("../dtcc/gbg_volume_mesh.xdmf")
 
-# ------------------------------------------------------------
-# Function space
-# -----------------------------------------------------------
-V = FunctionSpace(mesh, "Lagrange", 1)
-
 # -----------------------------------------------------------
 # Get the number of buildings from the boundary markers
 # -----------------------------------------------------------
 max_marker = int(markers.values.max())
 num_buildings = (max_marker + 1) // 2
 info(f"Number of buildings: {num_buildings}")
+
+# ------------------------------------------------------------
+# Function space
+# -----------------------------------------------------------
+V = FunctionSpace(mesh, "Lagrange", 1)
 
 # ------------------------------------------------------------
 # Boundary conditions

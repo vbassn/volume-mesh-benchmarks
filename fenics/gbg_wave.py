@@ -136,4 +136,4 @@ for n in range(num_steps):
 # ------------------------------------------------------------
 
 # Save final solution
-u_2.save("gbg_wave_output/final_solution.xdmf", t=T)
+u_2.save("gbg_wave_output/final_solution.xdmf")
