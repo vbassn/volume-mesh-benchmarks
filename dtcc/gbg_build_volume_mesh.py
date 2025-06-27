@@ -30,7 +30,6 @@ footprints = dtcc.extract_roof_points(
 # Compute building heights
 footprints = dtcc.compute_building_heights(footprints, terrain, overwrite=True)
 
-
 city = dtcc.City()
 city.add_buildings(footprints)
 city.add_terrain(terrain)
@@ -42,4 +41,5 @@ volume_mesh = build_volume_mesh(city=city, domain_height=H, max_mesh_size=h)
 volume_mesh.offset_to_origin()
 
 # Save mesh to file
+volume_mesh.save("gbg_volume_mesh.pb")
 volume_mesh.save("gbg_volume_mesh.xdmf")

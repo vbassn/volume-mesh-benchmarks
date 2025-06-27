@@ -34,4 +34,5 @@ mesh = dtcc.build_surface_mesh(city, lod=dtcc.GeometryType.LOD0)
 mesh.offset_to_origin()
 
 # Save mesh to file
+mesh.save("gbg_surface_mesh.pb")
 mesh.save("gbg_surface_mesh.xdmf")
