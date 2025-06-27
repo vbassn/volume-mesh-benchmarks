@@ -59,9 +59,9 @@ v = Field(
 )
 
 # Create city model and attach data
-
 city = City()
-city.bounds = mesh.bounds
+city.attributes["name"] = "Gothenburg"
+city.attributes["created_date"] = "1621-06-04"
 city.add_geometry(mesh)
 city.add_geometry(volume_mesh)
 city.add_field(T, VolumeMesh)
@@ -70,6 +70,13 @@ city.add_field(u, VolumeMesh)
 city.add_field(c, VolumeMesh)
 city.add_field(v, VolumeMesh)
 
+
+# Add some city objects
+park_bench = CityObject()
+lamp_post = CityObject()
+city.add_child(park_bench)
+city.add_child(lamp_post)
+
 # Save to file
 city.save("gbg_city.pb")
 
@@ -77,3 +84,6 @@ city.save("gbg_city.pb")
 _city = load_city("gbg_city.pb")
 for f in _city.geometry[GeometryType.VOLUME_MESH].fields:
     print(f"{f.description}: {f.values.shape}")
+
+print()
+city.tree()
