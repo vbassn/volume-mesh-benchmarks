@@ -1,4 +1,6 @@
 from fenics import *
+import numpy as np
+import h5py
 
 # More verbose output
 set_log_level(INFO)
@@ -25,25 +27,23 @@ num_buildings = (max_marker + 1) // 2
 info(f"Number of buildings: {num_buildings}")
 
 # ------------------------------------------------------------
-# Velocity field (placeholder, load from file later)
+# Load velocity field from resampled CFD data
 # ------------------------------------------------------------
-_x = SpatialCoordinate(mesh)
-L_x = xmax - xmin
-L_y = ymax - ymin
-L_z = zmax - zmin
-B = 10.0
-u = B * as_vector(
-    (
-        sin(np.pi * (_x[0] / L_x))
-        * cos(np.pi * _x[1] / L_y)
-        * sin(np.pi * _x[2] / L_z),
-        -cos(np.pi * (_x[0] / L_x + 0.5))
-        * sin(np.pi * _x[1] / L_y)
-        * sin(np.pi * _x[2] / L_z),
-        Constant(mesh, 0.0),
-    )
-)
-U_max = B
+info("Loading velocity field from resampled CFD data (direct HDF5)...")
+W = FunctionSpace(mesh, "Lagrange", 1, dim=3)
+u = Function(W)
+with h5py.File("flowfield/velocity.h5", "r") as h5:
+    vel = h5["/Function/f/0"][...]
+u.x.array[0::3] = vel[:, 0]
+u.x.array[1::3] = vel[:, 1]
+u.x.array[2::3] = vel[:, 2]
+
+# ------------------------------------------------------------
+# Compute CFL speed
+# ------------------------------------------------------------
+U_max_local = float(np.linalg.norm(vel, axis=1).max())
+U_max = MPI.COMM_WORLD.allreduce(U_max_local, op=MPI.MAX)
+info(f"Maximum velocity magnitude: {U_max:.3f} m/s")
 
 # ------------------------------------------------------------
 # Set time step (CFL‑like heuristic)
@@ -63,11 +63,11 @@ V = FunctionSpace(mesh, "Lagrange", 1)
 # ------------------------------------------------------------
 # Source term
 # ------------------------------------------------------------
-A = 100.0  # amplitude
-sigma = 10.0  # spatial extent (m)
-x0 = np.array((0.5 * (xmin + xmax), 0.25 * ymin + 0.25 * ymax, 0.9 * zmin + 0.1 * zmax))
-t0 = 0.1
+A = 1.0  # amplitude
+sigma = 5.0  # spatial extent (m)
+x0 = np.array((0.5 * (xmin + xmax), 0.5 * (ymin + ymax), 0.9 * zmin + 0.1 * zmax))
 _t = Constant(mesh, 0.0)
+_x = SpatialCoordinate(mesh)
 r2 = sum((_x[i] - x0[i]) ** 2 for i in range(3))
 f = A * exp(-r2 / (2 * sigma**2))
 
@@ -164,7 +164,7 @@ for n in range(num_steps):
 # Save final solution
 c_1.save("gbg_advdiff_output/final_solution.xdmf")
 
-# Save velocity field
-W = FunctionSpace(mesh, "Lagrange", 1, dim=3)
-u = project(u, W)
+# Save the loaded velocity field for visualization
 u.save("gbg_advdiff_output/velocity.xdmf")
+
+info("Simulation completed successfully!")
