@@ -111,8 +111,6 @@ L = c_0 / dt * v * dx + f * v * dx
 # ------------------------------------------------------------
 if supg:
 
-    # FIXME: Takes a long time to assemble, move outside of loop
-
     h_K = CellDiameter(mesh)
     u_norm = sqrt(dot(u, u) + 1.0e-12)
     tau = 1.0 / (2 * u_norm / h_K + 4 * kappa / h_K**2)
@@ -166,5 +164,3 @@ c_1.save("gbg_advdiff_output/final_solution.xdmf")
 
 # Save the loaded velocity field for visualization
 u.save("gbg_advdiff_output/velocity.xdmf")
-
-info("Simulation completed successfully!")

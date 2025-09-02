@@ -13,7 +13,7 @@ import vtk
 from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 
 # File paths
-SOURCE_XDMF = "flowfield/CitySimulationFluid000010000.xmf"
+SOURCE_XDMF = "flowfield/CitySimulationFluid000000000Iteration000002000.xmf"
 TARGET_XDMF = "../dtcc/gbg_volume_mesh.xdmf"
 OUTPUT_XDMF = "flowfield/velocity.xdmf"
 

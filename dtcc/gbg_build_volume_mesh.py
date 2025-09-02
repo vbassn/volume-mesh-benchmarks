@@ -6,9 +6,24 @@ from dtcc_core.builder import build_volume_mesh
 # Poseidon (57.6971779, 11.9795910)
 x0 = 319995.962899
 y0 = 6399009.716755
-L = 200.0
-H = 75.0
-h = 5.0
+L = 500.0
+H = 100.0
+h = 10.0
+
+# Used for Poisson, Helmholtz
+# L = 500.0
+# H = 75.0
+# h = 4.0
+
+# Used for wave equation
+# L = 500.0
+# H = 75.0
+# h = 8.0
+
+# Used for NS and advection-diffusion
+# L = 500.0
+# H = 100.0
+# h = 4.0
 
 # Define bounds
 bounds = dtcc.Bounds(x0 - 0.5 * L, y0 - 0.5 * L, x0 + 0.5 * L, y0 + 0.5 * L)

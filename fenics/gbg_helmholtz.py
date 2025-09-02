@@ -7,8 +7,8 @@ set_log_level(INFO)
 # Problem parameters
 # ------------------------------------------------------------
 c = 343.0  # speed of sound (m/s)
-f = 3.0  # frequency (Hz)
-k = 2.5 * np.pi * f / c
+f = 0.0  # frequency (Hz)
+k = 2.0 * np.pi * f / c
 
 # ------------------------------------------------------------
 # Geometry
@@ -83,13 +83,11 @@ if tau > 0.0:
     a += tau * (r_p_re * r_q_re + r_p_im * r_q_im) * dx
     L += -tau * s * r_q_re * dx
 
-
 # ------------------------------------------------------------
 # Shifted form for preconditioning
 # ------------------------------------------------------------
 alpha = 0.2
 beta = 0.65
-
 diag_shift = (1.0 - alpha**2) * k**2 * (p_re * q_re + p_im * q_im) * dx
 rot_shift = beta * k**2 * (p_im * q_re - p_re * q_im) * dx
 a_pc = a + diag_shift + rot_shift
@@ -110,7 +108,7 @@ opts = {
     "ksp_converged_reason": None,
     "ksp_type": "fgmres",
     "ksp_rtol": 1.0e-6,
-    "ksp_max_it": 1000,
+    "ksp_max_it": 10000,
     "pc_type": "hypre",
     "pc_hypre_type": "boomeramg",
     "pc_hypre_boomeramg_cycle_type": "W",

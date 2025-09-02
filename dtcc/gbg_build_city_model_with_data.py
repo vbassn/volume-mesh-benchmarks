@@ -42,21 +42,21 @@ u = Field(
     name="Complex pressure magnitude",
     unit="N/m^2",
     description="Simulation in central Gothenburg by solving the Helmholtz equation",
-    values=gbg_wave_solution,
+    values=gbg_helmholtz_solution,
 )
-c = Field(
-    name="Concentration",
-    unit="M",
-    description="Simulation in central Gothenburg by solving the advection-diffusion",
-    values=gbg_advdiff_solution,
-)
-v = Field(
-    name="Velocity",
-    unit="m/s",
-    description="Velocity field for the advection-diffusion equation",
-    values=gbg_advdiff_velocity,
-    dim=3,
-)
+# c = Field(
+#    name="Concentration",
+#    unit="M",
+#    description="Simulation in central Gothenburg by solving the advection-diffusion",
+#    values=gbg_advdiff_solution,
+# )
+# v = Field(
+#    name="Velocity",
+#    unit="m/s",
+#    description="Velocity field for the advection-diffusion equation",
+#    values=gbg_advdiff_velocity,
+#    dim=3,
+# )
 
 # Create city model and attach data
 city = City()
@@ -67,9 +67,8 @@ city.add_geometry(volume_mesh)
 city.add_field(T, VolumeMesh)
 city.add_field(p, VolumeMesh)
 city.add_field(u, VolumeMesh)
-city.add_field(c, VolumeMesh)
-city.add_field(v, VolumeMesh)
-
+# city.add_field(c, VolumeMesh)
+# city.add_field(v, VolumeMesh)
 
 # Add some city objects
 park_bench = CityObject()
