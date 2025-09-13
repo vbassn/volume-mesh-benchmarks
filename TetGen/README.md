@@ -38,3 +38,7 @@ After building the Python binding, you can run the demo script:
 ```bash
 python tetgen_volume_mesh_demo.py
 ```
+
+## Documentation
+
+Full TetGen manual: [TetGen 1.5 User's Manual (PDF)](https://wias-berlin.de/software/tetgen/1.5/doc/manual/manual.pdf)
