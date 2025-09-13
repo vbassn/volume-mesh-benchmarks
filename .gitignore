@@ -5,11 +5,13 @@ benchmarks/run_*
 benchmarks/*.csv
 dtcc/*.txt
 dtcc/*.csv
+output
 
 __pycache__
 *.py[cod]
 *.vtu
 *.pb
+*.so
 *.vtu
 *.out
 *.vtk
