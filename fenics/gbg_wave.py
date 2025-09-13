@@ -8,13 +8,13 @@ set_log_level(INFO)
 # ------------------------------------------------------------
 c = 343.0  # speed of sound (m/s)
 T = 1.0  # final time (s)
-skip = 10
+skip = 10  # skip time steps when saving
 
 # ------------------------------------------------------------
 # Geometry
 # ------------------------------------------------------------
 mesh, markers = load_mesh_with_markers("../dtcc/gbg_volume_mesh.xdmf")
-xmin, ymin, zmin, xmax, ymax, zmax = shift_to_origin(mesh)
+xmin, ymin, zmin, xmax, ymax, zmax = bounds(mesh)
 
 # ------------------------------------------------------------
 # Set time step based on CFL condition
@@ -32,7 +32,7 @@ info(f"Using dt = {dt :.3g} and {num_steps} time steps based on CFL condition")
 V = FunctionSpace(mesh, "Lagrange", 1)
 
 # ------------------------------------------------------------
-# Source term (real-valued)
+# Source term
 # ------------------------------------------------------------
 A = 100.0  # amplitude of source
 sigma = 5.0  # spatial extent (m)
@@ -83,7 +83,6 @@ a = u * v * dx + alpha * inner(grad(u), grad(v)) * dx + beta * u * v * ds
 L = (2 * u_1 - u_0) * v * dx - alpha * inner(grad(4 * u_1 + u_0), grad(v)) * dx
 L += gamma * f * v * dx + beta * u_1 * v * ds
 
-
 # ------------------------------------------------------------
 # Linear solver
 # ------------------------------------------------------------
@@ -104,7 +103,6 @@ opts = {
     "pc_hypre_type": "boomeramg",
 }
 
-# Set up linear problem
 problem = LinearProblem(a, L, u=u_2, bcs=[], petsc_options=opts)
 
 # -------------------------------------------------------------

@@ -30,6 +30,9 @@ city.add_buildings(buildings, remove_outside_terrain=True)
 # Build surface mesh
 mesh = dtcc.build_surface_mesh(city, lod=dtcc.GeometryType.LOD0)
 
+# Offset to origin
+mesh.offset_to_origin()
+
 # Save mesh to file
-mesh.save("gbg_surface_mesh.vtu")
+mesh.save("gbg_surface_mesh.pb")
 mesh.save("gbg_surface_mesh.xdmf")

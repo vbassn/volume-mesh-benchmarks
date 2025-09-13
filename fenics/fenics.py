@@ -24,8 +24,9 @@ from ufl import (
     SpatialCoordinate,
     CellDiameter,
 )
-from ufl import dx, ds, inner, grad, curl, div
+from ufl import dx, ds, dot, inner, grad, curl, div
 from ufl import exp, sin, cos, sqrt
+from ufl import as_vector
 
 __all__.extend(
     [
@@ -37,6 +38,7 @@ __all__.extend(
         "CellDiameter",
         "dx",
         "ds",
+        "dot",
         "inner",
         "grad",
         "curl",
@@ -45,6 +47,7 @@ __all__.extend(
         "sin",
         "cos",
         "sqrt",
+        "as_vector",
     ]
 )
 
@@ -58,17 +61,20 @@ from dolfinx.fem import Constant, Function, Expression
 from dolfinx.fem.petsc import LinearProblem
 
 
-def FunctionSpace(mesh, element, degree=None):
+def FunctionSpace(mesh, element, degree=None, dim=None):
     """
     Create a function space for the given mesh and element.
     This is a wrapper around dolfinx.fem.FunctionSpace.
     """
+
+    # FIXME: Might need to rethink this wrapper
 
     # Handle mixed elements
     if type(element) is tuple:
         # If element is a tuple, it is a mixed element
         if degree is not None:
             raise ValueError("Degree must not be specified for mixed elements.")
+        # FIXME: Does not handle dim
         elements = [
             basix.ufl.element(el, mesh.basix_cell(), degree) for el, degree in element
         ]
@@ -77,7 +83,12 @@ def FunctionSpace(mesh, element, degree=None):
         # If element is a string, create a Basix element with the specified degree
         if degree is None:
             raise ValueError("Degree must be specified for string elements.")
-        element = basix.ufl.element(element, mesh.basix_cell(), degree)
+        if dim is None:
+            element = basix.ufl.element(element, mesh.basix_cell(), degree)
+        else:
+            element = basix.ufl.element(
+                element, mesh.basix_cell(), degree, shape=(dim,)
+            )
     else:
         error("Element must be a tuple of elements or a string with degree.")
 
@@ -93,9 +104,35 @@ def interpolate(f, V):
     Interpolate a function f into a function space V.
     This is a wrapper around dolfinx.fem.Function.interpolate.
     """
+    info(f"Interpolating function into {V}")
     u = Function(V)
     u.interpolate(f)
     return u
+
+
+def project(f, V):
+    "Interpolate a function f into a function space V."
+
+    info(f"Projecting function into {V}")
+
+    opts = {
+        "ksp_monitor_short": None,
+        "ksp_converged_reason": None,
+        "ksp_type": "cg",
+        "ksp_rtol": 1.0e-6,
+        "pc_type": "hypre",
+        "pc_hypre_type": "boomeramg",
+    }
+
+    u = TrialFunction(V)
+    v = TestFunction(V)
+    a = inner(u, v) * dx
+    L = inner(f, v) * dx
+
+    problem = LinearProblem(a, L, petsc_options=opts)
+    f_h = problem.solve()
+
+    return f_h
 
 
 __all__.extend(
@@ -107,6 +144,7 @@ __all__.extend(
         "LinearProblem",
         "assemble_matrix",
         "interpolate",
+        "project",
     ]
 )
 
@@ -165,8 +203,12 @@ def DirichletBC(V, value, condition=None, markers=None, marker_value=None, dofs=
             )
         dofs = locate_dofs_topological(V, tdim - 1, markers.find(marker_value))
 
-    # If dofs are still None, we cannot create a boundary condition
-    if dofs is None:
+    # Extract dofs if we have dofs
+    elif dofs is not None:
+        dofs = np.array(dofs, dtype="int32")
+
+    # Raise error if missing data
+    else:
         raise ValueError(
             "Either condition, markers, or dofs must be provided to create a DirichletBC."
         )
@@ -217,7 +259,7 @@ def NeumannBC(mesh, condition=None, markers=None, marker_value=None):
         new_vals = np.full(facets.size, marker_value, dtype=np.int32)
         markers = meshtags(mesh, tdim - 1, facets, new_vals)
 
-    # If neither condition nor markers are provided, raise an error
+    # Raise error if missing data
     else:
         raise ValueError(
             "Either condition or markers must be provided to create a NeumannBC."
@@ -395,10 +437,10 @@ def bounds(mesh):
     return xmin, ymin, zmin, xmax, ymax, zmax
 
 
-def shift_to_origin(mesh):
+def offset_to_origin(mesh):
     """
-    Shift mesh coordinates so the global minimum (xmin,ymin,zmin)
-    moves to the origin (0,0,0).
+    Offset mesh coordinates so the global minimum (xmin, ymin, zmin)
+    moves to the origin (0, 0, 0).
 
     Returns:
         xmin, ymin, zmin, xmax, ymax, zmax for the shifted mesh
@@ -445,4 +487,4 @@ def _hmin(self):
 
 dolfinx.mesh.Mesh.hmin = _hmin
 
-__all__.extend(["bounds", "shift_to_origin"])
+__all__.extend(["bounds", "offset_to_origin"])

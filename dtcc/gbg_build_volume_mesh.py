@@ -2,14 +2,28 @@
 
 import dtcc
 from dtcc_core.builder import build_volume_mesh
-# from boundary_face_markers import extract_meshes_from_boundary_markers
 
 # Poseidon (57.6971779, 11.9795910)
 x0 = 319995.962899
 y0 = 6399009.716755
-L = 100.0
-H = 50.0
-h = 2.0
+L = 500.0
+H = 100.0
+h = 10.0
+
+# Used for Poisson, Helmholtz
+# L = 500.0
+# H = 75.0
+# h = 4.0
+
+# Used for wave equation
+# L = 500.0
+# H = 75.0
+# h = 8.0
+
+# Used for NS and advection-diffusion
+# L = 500.0
+# H = 100.0
+# h = 4.0
 
 # Define bounds
 bounds = dtcc.Bounds(x0 - 0.5 * L, y0 - 0.5 * L, x0 + 0.5 * L, y0 + 0.5 * L)
@@ -21,11 +35,9 @@ buildings = dtcc.download_footprints(bounds=bounds)
 pointcloud = pointcloud.remove_global_outliers(3)
 
 # Build terrain raster
-terrain = dtcc.build_terrain_raster(
-    pointcloud, cell_size=2, radius=3, ground_only=True
-)
+terrain = dtcc.build_terrain_raster(pointcloud, cell_size=2, radius=3, ground_only=True)
 
-    # Extract roof points
+# Extract roof points
 footprints = dtcc.extract_roof_points(
     buildings, pointcloud, statistical_outlier_remover=True
 )
@@ -33,18 +45,16 @@ footprints = dtcc.extract_roof_points(
 # Compute building heights
 footprints = dtcc.compute_building_heights(footprints, terrain, overwrite=True)
 
-
 city = dtcc.City()
 city.add_buildings(footprints)
 city.add_terrain(terrain)
 
 # Build volume mesh
-volume_mesh = build_volume_mesh(city=city, 
-                                domain_height=H, 
-                                max_mesh_size=h)
+volume_mesh = build_volume_mesh(city=city, domain_height=H, max_mesh_size=h)
 
-# Extract and save boundary meshes
-# extract_meshes_from_boundary_markers(volume_mesh, volume_mesh.boundary_markers)
+# Offset to origin
+volume_mesh.offset_to_origin()
 
 # Save mesh to file
+volume_mesh.save("gbg_volume_mesh.pb")
 volume_mesh.save("gbg_volume_mesh.xdmf")

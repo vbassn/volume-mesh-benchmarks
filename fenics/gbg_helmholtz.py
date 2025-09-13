@@ -7,20 +7,14 @@ set_log_level(INFO)
 # Problem parameters
 # ------------------------------------------------------------
 c = 343.0  # speed of sound (m/s)
-f = 5.0  # frequency (Hz)
+f = 0.0  # frequency (Hz)
 k = 2.0 * np.pi * f / c
 
 # ------------------------------------------------------------
 # Geometry
 # ------------------------------------------------------------
-# mesh = load_mesh("../dtcc/gbg_volume_mesh.xdmf")
-mesh = BoxMesh(0, 0, 0, 200, 200, 100, 64, 64, 32)  # for testing
-xmin, ymin, zmin, xmax, ymax, zmax = shift_to_origin(mesh)
-
-# Shift and save surface mesh for visualization (optional)
-# surface_mesh = load_mesh("../dtcc/gbg_surface_mesh.xdmf")
-# shift_to_origin(surface_mesh)
-# surface_mesh.save("gbg_helmholtz_output/surface_mesh.xdmf")
+mesh, markers = load_mesh_with_markers("../dtcc/gbg_volume_mesh.xdmf")
+xmin, ymin, zmin, xmax, ymax, zmax = bounds(mesh)
 
 # ------------------------------------------------------------
 # Check if we resolve the wavelength
@@ -38,7 +32,7 @@ if k * h > 0.9:
 W = FunctionSpace(mesh, (("Lagrange", 1), ("Lagrange", 1)))
 
 # ------------------------------------------------------------
-# Source term (real-valued)
+# Source term
 # ------------------------------------------------------------
 A = 1.0  # amplitude
 sigma = 5.0  # spatial extent (m)
@@ -47,26 +41,13 @@ _x = SpatialCoordinate(mesh)
 r2 = sum((_x[i] - x0[i]) ** 2 for i in range(3))
 s = A * exp(-r2 / (2 * sigma**2))
 
-
 # ------------------------------------------------------------
 # Boundary conditions
 # ------------------------------------------------------------
-def boundary_marker(x):
-    atol = 1e-3
-    return (
-        near(x[0], xmin, atol=atol)
-        | near(x[0], xmax, atol=atol)
-        | near(x[1], ymin, atol=atol)
-        | near(x[1], ymax, atol=atol)
-        | near(x[2], zmax, atol=atol)
-    )
-
-
-# Neumann condition for absorbing boundary
-ds = NeumannBC(mesh, boundary_marker)
+ds = NeumannBC(mesh, markers=markers, marker_value=[-2, -3, -4, -5, -6])
 
 # Dirichlet condition for anchor point (one dof)
-bc = DirichletBC(W.sub(0), 0.0, [0])
+bc = DirichletBC(W.sub(0), 0.0, dofs=[0])
 # bcs = [bc] # does not seem to help much
 bcs = []
 
@@ -102,13 +83,11 @@ if tau > 0.0:
     a += tau * (r_p_re * r_q_re + r_p_im * r_q_im) * dx
     L += -tau * s * r_q_re * dx
 
-
 # ------------------------------------------------------------
 # Shifted form for preconditioning
 # ------------------------------------------------------------
 alpha = 0.2
 beta = 0.65
-
 diag_shift = (1.0 - alpha**2) * k**2 * (p_re * q_re + p_im * q_im) * dx
 rot_shift = beta * k**2 * (p_im * q_re - p_re * q_im) * dx
 a_pc = a + diag_shift + rot_shift
@@ -129,7 +108,7 @@ opts = {
     "ksp_converged_reason": None,
     "ksp_type": "fgmres",
     "ksp_rtol": 1.0e-6,
-    "ksp_max_it": 1000,
+    "ksp_max_it": 10000,
     "pc_type": "hypre",
     "pc_hypre_type": "boomeramg",
     "pc_hypre_boomeramg_cycle_type": "W",

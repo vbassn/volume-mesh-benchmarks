@@ -16,14 +16,18 @@ Activate Conda:
 
     conda activate fenicsx-env
 
-Installing FEniCSx with complex number support:
+Installing extra packages:
+
+    conda install -c conda-forge h5py meshio scipy
+
+Installing FEniCSx with complex number support (didn't work):
 
 conda create -n fenicsx-cmplx \
-             -c conda-forge \
-             python=3.11 \
-             fenics-dolfinx \
-             "petsc=*=*complex*" \
-             "petsc4py=*=*complex*" \
-             "slepc=*=*complex*" \
-             mpich \
-             pyvista
+ -c conda-forge \
+ python=3.11 \
+ fenics-dolfinx \
+ "petsc=*=*complex*" \
+ "petsc4py=*=_complex_" \
+ "slepc=*=*complex\*" \
+ mpich \
+ pyvista
