@@ -11,8 +11,8 @@ def main():
     H = 100.0
 
     # TetGen quality parameters (see TetGen manual and tetwrap/switches.py)
-    max_edge_radius_ratio = 1.414
-    min_dihedral_angle = 30.0
+    max_edge_radius_ratio = None  # 1.414
+    min_dihedral_angle = None  # 30.0
     max_tet_volume = 10.0
 
     # Location of the current file
@@ -37,7 +37,7 @@ def main():
     city.building_heights_from_pointcloud()
     mesh = city.build_city_surface_mesh()
 
-    mesh.view()
+    # mesh.view()
 
     # Build simple box mesh
 

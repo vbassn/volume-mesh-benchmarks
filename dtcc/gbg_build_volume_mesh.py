@@ -1,7 +1,7 @@
 # Test case for volume mesh
 
 import dtcc
-from dtcc_core.builder import build_volume_mesh
+from dtcc_core.builder import build_city_volume_mesh
 
 # Poseidon (57.6971779, 11.9795910)
 x0 = 319995.962899
@@ -50,11 +50,13 @@ city.add_buildings(footprints)
 city.add_terrain(terrain)
 
 # Build volume mesh
-volume_mesh = build_volume_mesh(city=city, domain_height=H, max_mesh_size=h)
+volume_mesh = build_city_volume_mesh(city=city, domain_height=H, max_mesh_size=h)
 
 # Offset to origin
-volume_mesh.offset_to_origin()
+# volume_mesh.offset_to_origin()
 
 # Save mesh to file
-volume_mesh.save("gbg_volume_mesh.pb")
-volume_mesh.save("gbg_volume_mesh.xdmf")
+# volume_mesh.save("gbg_volume_mesh.pb")
+# volume_mesh.save("gbg_volume_mesh.xdmf")
+
+volume_mesh.save("dtcc_volume_mesh.vtu")  # For Paraview
