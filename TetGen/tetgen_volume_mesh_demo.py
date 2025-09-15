@@ -84,6 +84,8 @@ def main():
         switches_params=switches_params,
     )
 
+    volume_mesh.offset_to_origin()
+
     volume_mesh.save(output_dir / "tetgen_volume_mesh.vtu")
 
 
