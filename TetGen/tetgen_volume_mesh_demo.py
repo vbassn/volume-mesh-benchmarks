@@ -11,9 +11,9 @@ def main():
     H = 100.0
 
     # TetGen quality parameters (see TetGen manual and tetwrap/switches.py)
-    max_edge_radius_ratio = 1.414
-    min_dihedral_angle = 30.0
-    max_tet_volume = 10.0
+    max_edge_radius_ratio = 2.0
+    min_dihedral_angle = 20.0
+    max_tet_volume = 20.0
 
     # Location of the current file
     current_file = Path(__file__).resolve().parent
