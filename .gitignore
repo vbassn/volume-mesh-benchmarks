@@ -19,6 +19,8 @@ __pycache__
 *.csv
 *.png
 *.pkl
+*.xdmf
+*.h5
 .DS_Store
 
 !figures/*.png
