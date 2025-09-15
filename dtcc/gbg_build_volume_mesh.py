@@ -53,7 +53,7 @@ city.add_terrain(terrain)
 volume_mesh = build_city_volume_mesh(city=city, domain_height=H, max_mesh_size=h)
 
 # Offset to origin
-# volume_mesh.offset_to_origin()
+volume_mesh.offset_to_origin()
 
 # Save mesh to file
 # volume_mesh.save("gbg_volume_mesh.pb")
