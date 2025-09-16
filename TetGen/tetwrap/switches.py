@@ -40,65 +40,63 @@ tetgen [-pYrq_Aa_miO_S_T_XMwcdzfenvgkJBNEFICQVh] input_file
 """
 DEFAULT_TETGEN_PARAMS = {
     # Core
-    "plc": True,                    # -p : input is a PLC
-    "preserve_surface": False,      # -Y : keep input surface unchanged
-    "reconstruct": False,           # -r : reconstruct a previous mesh
-    "coarsen": False,               # -R : coarsen mesh
+    "plc": True,  # -p : input is a PLC
+    "preserve_surface": False,  # -Y : keep input surface unchanged
+    "reconstruct": False,  # -r : reconstruct a previous mesh
+    "coarsen": False,  # -R : coarsen mesh
     "assign_region_attributes": False,  # -A
-
     # Sizing / quality
-    "quality": None,                # -q{val} or -q if True
-    "max_volume": None,             # -a{val} or -a if True (per-region)
-    "sizing_function": None,        # -m{token} or -m if True
-    "insert_points": None,          # -i{token} or -i if True
-    "optimize_level": None,         # -O{int}
-    "max_added_points": None,       # -S{int}
-    "coplanar_tolerance": None,     # -T{float}
-
+    "quality": None,  # -q{val} or -q if True
+    "max_volume": None,  # -a{val} or -a if True (per-region)
+    "sizing_function": None,  # -m{token} or -m if True
+    "insert_points": None,  # -i{token} or -i if True
+    "optimize_level": None,  # -O{int}
+    "max_added_points": None,  # -S{int}
+    "coplanar_tolerance": None,  # -T{float}
     # Numerical / topology
-    "no_exact_arithmetic": False,   # -X
-    "no_merge_coplanar": False,     # -M
-    "weighted_delaunay": False,     # -w
-    "keep_convex_hull": False,      # -c
+    "no_exact_arithmetic": False,  # -X
+    "no_merge_coplanar": False,  # -M
+    "weighted_delaunay": False,  # -w
+    "keep_convex_hull": False,  # -c
     "detect_self_intersections": False,  # -d
-
     # Numbering / output control
-    "zero_numbering": False,        # -z (output files start from 0)
-    "output_faces": False,          # -f
-    "output_edges": False,          # -e
-    "output_neighbors": False,      # -n
-    "output_voronoi": False,        # -v
-    "output_medit_mesh": False,     # -g
-    "output_vtk": False,            # -k
+    "zero_numbering": False,  # -z (output files start from 0)
+    "output_faces": False,  # -f
+    "output_edges": False,  # -e
+    "output_neighbors": False,  # -n
+    "output_voronoi": False,  # -v
+    "output_medit_mesh": False,  # -g
+    "output_vtk": False,  # -k
     "no_jettison_unused_vertices": False,  # -J
-    "suppress_boundary_output": False,     # -B
-    "suppress_node_file": False,    # -N
-    "suppress_ele_file": False,     # -E
-    "suppress_face_edge_files": False,     # -F
-    "suppress_iteration_numbers": False,   # -I
-    "check_mesh": False,            # -C
-
+    "suppress_boundary_output": False,  # -B
+    "suppress_node_file": False,  # -N
+    "suppress_ele_file": False,  # -E
+    "suppress_face_edge_files": False,  # -F
+    "suppress_iteration_numbers": False,  # -I
+    "check_mesh": False,  # -C
     # Verbosity
-    "quiet": False,                 # -Q
-    "verbose": False,               # -V
-
+    "quiet": False,  # -Q
+    "verbose": False,  # -V
     # Misc
-    "help": False,                  # -h
-    "extra": "",                    # anything to append verbatim
+    "help": False,  # -h
+    "extra": "",  # anything to append verbatim
     # Alias: if you prefer `refine=True` to mean bare `-q`
-    "refine": False,                # -> -q (only if quality is None)
+    "refine": False,  # -> -q (only if quality is None)
 }
+
 
 def tetgen_defaults():
     """Return a fresh copy of default TetGen parameters you can tweak."""
     return deepcopy(DEFAULT_TETGEN_PARAMS)
 
+
 def _fmt_num(x):
-    if x is True:   # bare flag (no value)
+    if x is True:  # bare flag (no value)
         return ""
     if isinstance(x, float):
         return f"{x:g}"
     return str(x)
+
 
 def _emit_q(cfg) -> str:
     # precedence: explicit radius_edge_ratio/min_dihedral_angle override 'quality'
@@ -121,7 +119,9 @@ def _emit_q(cfg) -> str:
             ratio = q.get("ratio", ratio)
             angle = q.get("min_dihedral", angle)
         else:
-            raise ValueError("quality must be True | number | (ratio, angle) | {'ratio':..,'min_dihedral':..}")
+            raise ValueError(
+                "quality must be True | number | (ratio, angle) | {'ratio':..,'min_dihedral':..}"
+            )
 
     # Build q string
     s = "q"
@@ -193,7 +193,9 @@ def build_tetgen_switches(params=None, **overrides) -> str:
 
     # quality
     q_str = _emit_q(cfg)
-    if q_str: parts.append(q_str)
+    print("Quality string:", q_str)
+    if q_str:
+        parts.append(q_str)
 
     # max volume: -a, -a{val}
     a = cfg.get("max_volume")
