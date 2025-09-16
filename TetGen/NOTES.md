@@ -18,8 +18,6 @@ Q = Mesh quality (aspect ratio in Paraview)
 
 ## TetGen
 
-## #Cells CPU time Quality
-
 V = max_tet_volume
 
 Max coarse: 1e9 191,003 7.018 11.900
@@ -45,12 +43,10 @@ V N T Q
 
 h = max_mesh_size
 
-## #Cells CPU time Quality
-
-h N T Q
-
 Max coarse: 200.0 4,146,784 71.0 1e30
 Max coarse: 80.0 4,146,784 61.25 1e30
+
+h N T Q
 
 40.0 4,146,784 69.44 1e30
 20.0 2,646,227 8.735 1e30
