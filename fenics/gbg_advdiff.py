@@ -9,7 +9,7 @@ set_log_level(INFO)
 # Problem parameters
 # ------------------------------------------------------------
 kappa = 1.0  # molecular diffusivity (m²/s)
-T = 60.0  # final time (s)
+T = 10.0  # final time (s)
 skip = 1  # skip time steps when saving
 supg = False  # toggle streamline‑upwind term
 

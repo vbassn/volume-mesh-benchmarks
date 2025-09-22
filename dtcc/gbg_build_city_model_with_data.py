@@ -20,8 +20,8 @@ def load_h5(filename):
 
 # Load simulation data
 gbg_poisson_solution = load_h5("../fenics/gbg_poisson_output/solution.h5")
-gbg_wave_solution = load_h5("../fenics/gbg_wave_output/final_solution.h5")
-gbg_helmholtz_solution = load_h5("../fenics/gbg_helmholtz_output/solution.h5")
+# gbg_wave_solution = load_h5("../fenics/gbg_wave_output/final_solution.h5")
+# gbg_helmholtz_solution = load_h5("../fenics/gbg_helmholtz_output/solution.h5")
 gbg_advdiff_solution = load_h5("../fenics/gbg_advdiff_output/final_solution.h5")
 gbg_advdiff_velocity = load_h5("../fenics/gbg_advdiff_output/velocity.h5")
 
@@ -32,31 +32,33 @@ T = Field(
     description="Simulation in central Gothenburg by solving the Poisson equation",
     values=gbg_poisson_solution,
 )
-p = Field(
-    name="Pressure",
-    unit="N/m^2",
-    description="Simulation in central Gothenburg by solving the wave equation",
-    values=gbg_wave_solution,
-)
-u = Field(
-    name="Complex pressure magnitude",
-    unit="N/m^2",
-    description="Simulation in central Gothenburg by solving the Helmholtz equation",
-    values=gbg_helmholtz_solution,
-)
-# c = Field(
-#    name="Concentration",
-#    unit="M",
-#    description="Simulation in central Gothenburg by solving the advection-diffusion",
-#    values=gbg_advdiff_solution,
+
+# p = Field(
+#    name="Pressure",
+#    unit="N/m^2",
+#    description="Simulation in central Gothenburg by solving the wave equation",
+#    values=gbg_wave_solution,
 # )
-# v = Field(
-#    name="Velocity",
-#    unit="m/s",
-#    description="Velocity field for the advection-diffusion equation",
-#    values=gbg_advdiff_velocity,
-#    dim=3,
+# u = Field(
+#    name="Complex pressure magnitude",
+#    unit="N/m^2",
+#    description="Simulation in central Gothenburg by solving the Helmholtz equation",
+#    values=gbg_helmholtz_solution,
 # )
+c = Field(
+    name="Concentration",
+    unit="M",
+    description="Simulation in central Gothenburg by solving the advection-diffusion",
+    values=gbg_advdiff_solution,
+)
+
+v = Field(
+    name="Velocity",
+    unit="m/s",
+    description="Velocity field for the advection-diffusion equation",
+    values=gbg_advdiff_velocity,
+    dim=3,
+)
 
 # Create city model and attach data
 city = City()
@@ -65,10 +67,10 @@ city.attributes["created_date"] = "1621-06-04"
 city.add_geometry(mesh)
 city.add_geometry(volume_mesh)
 city.add_field(T, VolumeMesh)
-city.add_field(p, VolumeMesh)
-city.add_field(u, VolumeMesh)
-# city.add_field(c, VolumeMesh)
-# city.add_field(v, VolumeMesh)
+# city.add_field(p, VolumeMesh)
+# city.add_field(u, VolumeMesh)
+city.add_field(c, VolumeMesh)
+city.add_field(v, VolumeMesh)
 
 # Add some city objects
 park_bench = CityObject()

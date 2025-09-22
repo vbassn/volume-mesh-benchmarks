@@ -56,7 +56,7 @@ volume_mesh = build_city_volume_mesh(city=city, domain_height=H, max_mesh_size=h
 volume_mesh.offset_to_origin()
 
 # Save mesh to file
-# volume_mesh.save("gbg_volume_mesh.pb")
-# volume_mesh.save("gbg_volume_mesh.xdmf")
+volume_mesh.save("gbg_volume_mesh.pb")
+volume_mesh.save("gbg_volume_mesh.xdmf")
 
-volume_mesh.save("dtcc_volume_mesh.vtu")  # For Paraview
+# volume_mesh.save("dtcc_volume_mesh.vtu")  # For Paraview
